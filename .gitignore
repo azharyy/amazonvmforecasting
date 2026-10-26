@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+data/*.csv
+data/*.json
+data/*.parquet
+models/*.pkl
+models/*.joblib
+models/*.h5
+.env
+.DS_Store
+
+# Dataset and generated reports
+challenge_data/*.gz
+challenge_data/SHA256SUMS
+challenge_data/DATA_CARD.md
+data-v1.tar.gz
+reports/generated/
