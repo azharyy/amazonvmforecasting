@@ -1,4 +1,4 @@
-# Python 3.12 is the tested interpreter. All six versions match your list.
+# Exact pins for 64-bit Python 3.11+ (recorded runs: Python 3.11.9 on Windows).
 numpy==2.4.6
 pandas==3.1.0
 scipy==1.17.1

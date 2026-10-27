@@ -1,6 +1,6 @@
 # Atomity forecasting notebook starter
 
-Start with `notebooks/01_forecasting.ipynb`. It contains **38 numbered Markdown/code cells**
+Start with `notebooks/01_forecasting.ipynb`. It contains **39 numbered Markdown/code cells**
 (19 executable cells), beginning with requirements and explaining each transformation before
 its code. The notebook produces the two required forecasts with the 110/24 chronological split.
 It is a working investigation starter, not a finished scientific report.
@@ -41,8 +41,9 @@ package install or the starter splitter's unsuitable defaults.
 
 ## 2. Requirements
 
-Use **64-bit Python 3.12** for the tested profile. Python 3.11+ is required by the assignment;
-the pins below were checked together on Python 3.12. All six direct dependencies match your list.
+Use **64-bit Python 3.11 or newer** (the assignment's minimum). The recorded runs used Python 3.11.9
+on Windows with the exact pins below; see `TESTING.md`. The starter bundle reported an earlier check on
+Python 3.12/Linux that was not repeated here.
 
 | Dependency | Pin | Purpose |
 |---|---:|---|
@@ -67,7 +68,7 @@ scikit-learn together. A separate environment avoids conflicts with unrelated pa
 Run these in the **terminal**, not in an ordinary Python cell:
 
 ```powershell
-py -3.12 -m venv .venv
+python -m venv .venv    # any 64-bit Python 3.11+; check with: python --version
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install --only-binary=:all: -r requirements.txt
 .\.venv\Scripts\python.exe -m pip check
@@ -75,13 +76,13 @@ py -3.12 -m venv .venv
 ```
 
 These commands use the environment interpreter explicitly, so PowerShell activation is not needed.
-If `py -3.12` is unavailable, install 64-bit Python 3.12 first; do not substitute an unknown
-interpreter silently.
+If `python --version` reports anything older than 3.11, install a 64-bit Python 3.11+ first; do not
+substitute an unknown interpreter silently.
 
 ### macOS/Linux
 
 ```bash
-python3.12 -m venv .venv
+python3 -m venv .venv   # any 64-bit Python 3.11+
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install --only-binary=:all: -r requirements.txt
 .venv/bin/python -m pip check
@@ -178,24 +179,16 @@ terminal output and saved figures/CSVs remain available. It intentionally does n
 executed `.ipynb`. Use VS Code for the interactive notebook experience.
 
 The output directory contains `predictions.csv`, `frozen_run.json`, a runtime dependency snapshot,
-validation predictions/metrics, segment/error/sensitivity tables, policy results and figures.
-Copy the generated prediction file to the repository root for submission; do not edit its values.
-
-Windows:
-
-```powershell
-Copy-Item reports/generated/predictions.csv predictions.csv
-```
-
-macOS/Linux:
-
-```bash
-cp reports/generated/predictions.csv predictions.csv
-```
+validation predictions/metrics, segment/error/sensitivity/leakage tables, policy results and figures.
+The runner also writes the submission copy `predictions.csv` at the repository root and verifies it
+against the frozen hash, so no manual copy or edit is needed. `--predictions PATH` writes the copy
+elsewhere, for example for a smoke test.
 
 `frozen_run.json` records development-code digests (excluding notebook outputs and the optional
 evaluation cell), the configuration, model decisions, data hashes, package versions, predictions
 hash and fit diagnostics. Save the notebook before freezing so these digests describe your code.
+An earlier `frozen_run.json` is archived with its predictions under `frozen_history/` before it
+would be overwritten.
 
 ## 7. Open the holdout only after freezing
 
@@ -208,12 +201,12 @@ It recomputes the same predeclared training-only pipeline, freezes predictions, 
 them once. Keep the original opening record. After seeing holdout outcomes, do not tune models,
 features or alert thresholds against them. A later run is not a newly untouched test.
 
-## 8. Remaining assignment work
+## 8. Report
 
-Review the generated evidence and write the required 4–6-page report. Explain constant count
-under complete-trace selection, unweighted utilization versus CPU demand, scarce validation
-windows, failures, and the bounded operational interpretation. This starter does not claim
-that an alert cost scenario establishes resource savings or production readiness.
+The 4–6-page report is `reports/final_report.md`, written from the recorded run. It covers constant
+count under complete-trace selection, unweighted utilization versus CPU demand, scarce validation
+windows, failures, and the bounded operational interpretation. An alert cost scenario does not
+establish resource savings or production readiness. The final holdout evaluation remains unopened.
 
 ## Sources
 

@@ -1,14 +1,18 @@
 """Run this Python-only notebook's cells in order in a fresh Python process."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=Path("challenge_data"))
     parser.add_argument("--output", type=Path, default=Path("reports/generated"))
+    parser.add_argument("--predictions", type=Path, default=Path("predictions.csv"),
+                        help="submission copy of the frozen predictions")
     parser.add_argument("--evaluate-holdout", action="store_true")
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
@@ -30,7 +34,11 @@ def main():
                 source = "".join(source)
             print(f"Running notebook cell {number}", flush=True)
             exec(compile(source, f"notebook-cell-{number}", "exec"), namespace)
-    print(f"Created {args.output / 'predictions.csv'}")
+    shutil.copyfile(args.output / "predictions.csv", args.predictions)
+    frozen = json.loads((args.output / "frozen_run.json").read_text(encoding="utf-8"))
+    if hashlib.sha256(args.predictions.read_bytes()).hexdigest() != frozen["predictions_sha256"]:
+        raise RuntimeError(f"{args.predictions} does not match the frozen predictions.")
+    print(f"Created {args.output / 'predictions.csv'} and its frozen copy {args.predictions}")
 
 
 if __name__ == "__main__":
