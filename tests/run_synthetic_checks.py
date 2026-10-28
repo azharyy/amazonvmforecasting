@@ -1,3 +1,13 @@
+# <module name="synthetic end-to-end checks">
+# <challenge>ASSIGNMENT sections 3B–3F and 7–9 require correct targets,
+# leakage-safe evaluation and clean-checkout reproduction.</challenge>
+# <how>This file drives the actual runner on isolated synthetic project copies.
+# It checks serialized outputs, refusal timing and immutable evidence.</how>
+# <why>Known-answer fixtures and deliberate corruption are more decisive than
+# checking that a notebook simply exits successfully on one real dataset.</why>
+# <tradeoff>These are protocol and edge-case checks, not an accuracy estimate
+# or evidence of generalization beyond this short curated trace.</tradeoff>
+# </module>
 """Synthetic end-to-end checks of run_notebook.py; challenge_data and its holdout are never read.
 
 1. A constant-CPU smoke release (134 keys from 600 s, VMs at 0, 20 and 40%) runs to completion and forecasts
@@ -23,6 +33,8 @@ import subprocess
 import sys
 import tempfile
 
+# <setup>Mirror the contract’s 134-key grid while using a nonzero origin and
+# a tiny population; smooth, irregular and constant CPUs stress different fits.</setup>
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = ["run_notebook.py", "requirements.txt", "notebooks/01_forecasting.ipynb"]
 KEYS = [600 + 300 * step for step in range(134)]
@@ -31,6 +43,14 @@ META = ["vm_id", "subscription_id", "deployment_id", "timestamp_vm_created", "ti
 LEVELS = [lambda step: 10 + 3 * math.sin(step / 3), lambda step: 30 + step * 7919 % 13 / 2, lambda step: 50.]
 
 
+# <function name="write_release">
+# <how>Create tiny gzip CSVs with the release schema and all 134 five-minute keys. Each callable
+# supplies one VM’s CPU; None omits that observation.</how>
+# <why>Synthetic values make exact forecasts and failure cases calculable without inspecting real
+# holdout targets. The offset grid catches a runner hard-coded to start at zero.</why>
+# <tradeoff>A poisoned duplicate appears only after the training boundary: development must still
+# succeed, while an actual holdout read must fail.</tradeoff>
+# </function>
 def write_release(directory, levels, poison_holdout=False):
     """A smoke release without SHA256SUMS: VM i reads levels[i](step) percent at every key (None: absent)."""
     directory.mkdir(parents=True)
@@ -50,6 +70,14 @@ def write_release(directory, levels, poison_holdout=False):
             writer.writerow([f"vm_{vm}", "sub", f"dep_{vm}", 0, 999999, 50, 20, 45, "Unknown", "2", "4"])
 
 
+# <function name="copy_project">
+# <how>Copy only the runner, pinned requirements and notebook into an isolated test project;
+# optionally change one exact notebook fragment.</how>
+# <why>Testing temporary copies exercises the real entry point while keeping intentionally broken
+# configuration/source edits out of the working checkout.</why>
+# <tradeoff>The single-occurrence assertion makes mutation tests fail if a future edit makes their
+# replacement ambiguous.</tradeoff>
+# </function>
 def copy_project(destination, *replacements):
     for name in SOURCES:
         (destination / name).parent.mkdir(parents=True, exist_ok=True)
@@ -63,6 +91,14 @@ def copy_project(destination, *replacements):
     return destination
 
 
+# <function name="run">
+# <how>Launch the copied runner with this test process’s interpreter, explicit paths, captured
+# output and an optional evaluation flag. Return status, log and last started cell.</how>
+# <why>A fresh subprocess prevents notebook globals and fitted state leaking between scenarios;
+# the same interpreter guarantees the test uses the installed dependencies.</why>
+# <tradeoff>Cell-number checks locate early refusal, but the poisoned-data and unchanged-digest
+# assertions provide stronger behavioral evidence.</tradeoff>
+# </function>
 def run(project, data, out, *flags, evidence=None):
     """Run a project's runner in a fresh process; return exit code, output and the last cell started."""
     result = subprocess.run(
@@ -74,25 +110,55 @@ def run(project, data, out, *flags, evidence=None):
     return result.returncode, result.stdout + result.stderr, int(cells[-1]) if cells else 0
 
 
+# <function name="sha256">
+# <how>Hash exact file bytes with SHA-256.</how>
+# <why>Byte-level comparison detects rewritten records and newline changes that a parsed numeric
+# comparison would miss.</why>
+# </function>
 def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+# <function name="digests">
+# <how>Walk all files recursively and map normalized relative names to byte digests.</how>
+# <why>Comparing complete directory maps catches both modified contents and added/deleted
+# evidence; checking only predictions would miss protocol damage.</why>
+# </function>
 def digests(directory):
     return {path.relative_to(directory).as_posix(): sha256(path) for path in sorted(directory.rglob("*")) if path.is_file()}
 
 
+# <function name="read_csv">
+# <how>Read CSV rows with the standard library, retaining the header and string fields.</how>
+# <why>The assertions inspect the actual serialized output rather than relying on the notebook’s
+# own DataFrame validation.</why>
+# </function>
 def read_csv(path):
     with path.open(newline="") as stream:
         return list(csv.reader(stream))
 
 
+# <function name="teacher_forcing">
+# <how>Find the teacher-forcing status column by header name and index its rows by dataset label
+# and origin.</how>
+# <why>This lets the test distinguish a detected leak from a degenerate control that cannot react
+# to future values.</why>
+# </function>
 def teacher_forcing(out):
     rows = read_csv(out / "leakage_checks.csv")
     column = rows[0].index("control_teacher_forcing")
     return {(row[0], int(row[1])): row[column] for row in rows[1:]}
 
 
+# <function name="check_constant_releases">
+# <how>Run constant and late-arrival populations; check exact output keys/values, submission
+# copying and positive-control status.</how>
+# <why>The release’s count can be constant, so a zero-error persistence baseline and unresponsive
+# leakage control are realistic edge cases. A second population separates constant features from
+# constant targets.</why>
+# <tradeoff>Three synthetic VMs also show that the code is not restricted to the documented
+# 10,000-VM population.</tradeoff>
+# </function>
 def check_constant_releases(tmp, project):
     data, out = tmp / "constant", tmp / "constant_out"
     write_release(data, [lambda step: 0., lambda step: 20., lambda step: 40.])
@@ -120,6 +186,14 @@ def check_constant_releases(tmp, project):
           " also when only the control's features are constant")
 
 
+# <function name="expect_refusal">
+# <how>Fingerprint existing evidence, request evaluation and require a specific failure before
+# data parsing, with every existing output unchanged.</how>
+# <why>A nonzero exit alone could hide an unrelated failure. The reason, cell boundary and
+# poisoned duplicate jointly test the intended gate.</why>
+# <tradeoff>The bound refers to this notebook’s current cell layout and must change if cells are
+# reordered.</tradeoff>
+# </function>
 def expect_refusal(project, data, out, reason, *flags):
     before = digests(out)
     code, log, last_cell = run(project, data, out, "--evaluate-holdout", *flags)
@@ -129,6 +203,14 @@ def expect_refusal(project, data, out, reason, *flags):
     assert digests(out) == before, "a refused evaluation changed existing records"
 
 
+# <function name="check_protocol">
+# <how>Freeze, evaluate and repeat synthetic runs; then independently mutate configuration,
+# source, archive location, compressed data, predictions and submission bytes.</how>
+# <why>The assignment’s public holdout depends on an honest evaluation protocol. These tests show
+# that changed procedures cannot silently reuse an old frozen run.</why>
+# <tradeoff>Every evaluation here uses fabricated data. These tests do not open or score the real
+# final 24 targets.</tradeoff>
+# </function>
 def check_protocol(tmp, project):
     data, poisoned = tmp / "varying", tmp / "varying_poisoned"
     write_release(data, LEVELS)
@@ -147,12 +229,17 @@ def check_protocol(tmp, project):
     assert digests(out) == opened
     print("2a. unchanged frozen run evaluated once; the repeat returned saved results; records unchanged")
 
+    # <scenario>Change the selection policy after evaluation: both evaluating
+    # the changed policy and overwriting the opened run must be refused.</scenario>
     gain_project = copy_project(tmp / "project_gain", ("MIN_GAIN = .05", "MIN_GAIN = .06"))
     expect_refusal(gain_project, data, out, "configuration")
     code, log, _ = run(gain_project, data, out)
     assert code != 0 and "sealed" in log and digests(out) == opened, log[-3000:]
     print("2b. after opening: a 6% gain rule is refused for evaluation, and re-freezing the opened run is refused")
 
+    # <scenario>Poison only the unseen rows, then re-freeze a different policy.
+    # Development must ignore the poison and archive the old evidence intact;
+    # identical predictions do not excuse changed source or policy.</scenario>
     sealed, refrozen = tmp / "sealed", tmp / "refrozen"
     assert run(project, poisoned, sealed)[0] == 0
     assert run(project, poisoned, refrozen)[0] == 0
@@ -170,6 +257,8 @@ def check_protocol(tmp, project):
     print("2c. a re-freeze archives the previous run byte-for-byte; archived copies, a changed configuration and a"
           " changed evaluation definition are refused although the predictions are identical")
 
+    # <scenario>Recompression preserves parsed observations but changes bytes;
+    # the frozen data fingerprint intentionally notices this provenance change.</scenario>
     regzipped = tmp / "regzipped"
     shutil.copytree(poisoned, regzipped)
     content = gzip.decompress((poisoned / "vm_cpu_readings.csv.gz").read_bytes())
@@ -182,6 +271,8 @@ def check_protocol(tmp, project):
     expect_refusal(project, poisoned, edited, "predictions_sha256")
     print("2d. changed data bytes and frozen prediction bytes are refused before any data row is parsed")
 
+    # <scenario>A first attempted opening is recorded even when bad synthetic
+    # holdout data aborts scoring, so a retry cannot masquerade as untouched.</scenario>
     code, log, _ = run(project, poisoned, sealed, "--evaluate-holdout")
     assert code != 0 and "Conflicting duplicate" in log and (sealed / "holdout_opened.json").exists(), log[-3000:]
     record = (sealed / "holdout_opened.json").read_bytes()
@@ -194,6 +285,14 @@ def check_protocol(tmp, project):
           " copy is refused")
 
 
+# <function name="check_data_v1_snapshot">
+# <how>Create synthetic checksums and temporarily substitute their pinned digests in a copied
+# notebook so the genuine-release snapshot branch can be exercised.</how>
+# <why>This reaches release-specific evidence behavior without downloading or revealing real
+# holdout values; the production notebook’s trust pins remain unchanged.</why>
+# <tradeoff>The pseudo-release tests snapshot mechanics, not the authenticity or statistical
+# representativeness of data-v1.</tradeoff>
+# </function>
 def check_data_v1_snapshot(tmp, project, run_notebook):
     data, out = tmp / "pseudo_v1", tmp / "pseudo_v1_out"
     write_release(data, LEVELS)
@@ -220,6 +319,8 @@ def check_data_v1_snapshot(tmp, project, run_notebook):
     assert code == 0 and "REPEAT" in log and (snapshot / "holdout_opened.json").read_bytes() == record, log[-3000:]
     print("3a. a data-v1 freeze writes its snapshot; its opening record marks a copy's evaluation as a repeat")
 
+    # <scenario>Repeated snapshot writes are idempotent only for identical
+    # evidence; a modified existing CSV must be rejected rather than repaired.</scenario>
     first = run_notebook.snapshot_evidence(out, tmp / "evidence")
     files = digests(first)
     assert run_notebook.snapshot_evidence(out, tmp / "evidence") == first and digests(first) == files
@@ -233,6 +334,14 @@ def check_data_v1_snapshot(tmp, project, run_notebook):
     print("3b. evidence snapshots are written once per frozen run and never replaced")
 
 
+# <function name="main">
+# <how>Create one temporary workspace, copy the project, then run constant-series, freeze/evaluate
+# and snapshot scenarios in order.</how>
+# <why>The entry point covers behavior that spans multiple notebook runs; single-run notebook
+# assertions cannot prove repeat and tampering behavior.</why>
+# <tradeoff>TemporaryDirectory removes fixtures at the end; success is printed only after every
+# assertion completes.</tradeoff>
+# </function>
 def main():
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
         tmp = Path(directory)

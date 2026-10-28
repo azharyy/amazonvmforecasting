@@ -6,6 +6,11 @@ Forecasts `active_vm_count` and `aggregate_cpu_utilization` for the final 24 fiv
 Governing contract: [`atomityhq/forecasting-challenge@6e5ac0e`](https://github.com/atomityhq/forecasting-challenge/tree/6e5ac0e4d2f1d81fab0903ce0a974037745db35b)
 (`ASSIGNMENT.md`, `DATASET.md`, `SUBMISSION.md`).
 
+For an explanation of the full design and its challenge-specific tradeoffs, read
+[`CODE_WALKTHROUGH.md`](CODE_WALKTHROUGH.md), then the XML-tagged comments in the
+notebook and Python files. They explain both how each function works and why the
+pipeline uses these data, validation, model-selection and evidence rules.
+
 ## 1. Environment
 
 Use 64-bit Python 3.11 or newer. The recorded runs used Python 3.11.9 on Windows. `requirements.txt` pins the

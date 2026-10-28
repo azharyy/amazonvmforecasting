@@ -1,3 +1,13 @@
+# <module name="frozen-evidence report synchronization">
+# <challenge>ASSIGNMENT sections 3F–3G and 7–8 ask for error analysis,
+# operational interpretation and reproducible communication.</challenge>
+# <how>Read one tracked snapshot, render its five table blocks, and check
+# selected prose claims against the same saved evidence.</how>
+# <why>Report generation stays separate from training so checking the report
+# cannot refit models, change selections or expose the final holdout.</why>
+# <tradeoff>The cited evidence is historical. A passing check establishes
+# consistency with that run, not that it was produced by today’s source.</tradeoff>
+# </module>
 """Regenerate the result tables in final_report.md from its tracked evidence snapshot, and verify its numbers.
 
 usage: python reports/report_tables.py [--check]
@@ -15,6 +25,8 @@ from pathlib import Path
 import re
 import sys
 
+# <setup>Resolve paths from this file, name the CPU target consistently,
+# and define a bounded marker pattern so one table cannot consume the next.</setup>
 REPORT = Path(__file__).resolve().parent / "final_report.md"
 ROOT = REPORT.parent.parent
 CPU = "aggregate_cpu_utilization"
@@ -25,20 +37,49 @@ GATES = {"pass_mae_gain": "{gain:.0%} gain", "pass_two_windows": "window wins", 
 BLOCK = r"<!-- table:{name} -->\n(?:(?!<!-- table:).)*?<!-- /table -->"  # never runs into the next table
 
 
+# <function name="rows">
+# <how>Load a snapshot CSV as dictionaries and retain rows matching every named equality
+# filter.</how>
+# <why>The report renderer reads frozen evidence, rather than rerunning models and silently
+# presenting a newer experiment.</why>
+# <tradeoff>CSV fields remain strings until their use site converts them, preserving exact labels
+# and Boolean encodings.</tradeoff>
+# </function>
 def rows(snapshot, name, **where):
     with (snapshot / name).open(newline="", encoding="utf-8") as stream:
         return [row for row in csv.DictReader(stream) if all(row[key] == value for key, value in where.items())]
 
 
+# <function name="signed">
+# <how>Format a number with an explicit sign and chosen decimal precision, replacing the ASCII
+# hyphen with a typographic minus.</how>
+# <why>One formatter keeps prose and tables consistent, making strict quoted-number checks
+# predictable.</why>
+# </function>
 def signed(value, digits=1):
     return f"{value:+.{digits}f}".replace("-", "−")
 
 
+# <function name="table">
+# <how>Build a Markdown header, alignment separator and body from already formatted cells.</how>
+# <why>Using the standard library is sufficient for five fixed report tables; the caller controls
+# precision, labels and emphasis explicitly.</why>
+# <tradeoff>This is a small report-specific renderer, not a general Markdown escaping
+# library.</tradeoff>
+# </function>
 def table(header, right, body):
     lines = ["| " + " | ".join(header) + " |", "|" + "|".join("---:" if r else "---" for r in right) + "|"]
     return "\n".join(lines + ["| " + " | ".join(row) + " |" for row in body])
 
 
+# <function name="tables">
+# <how>Read the cited run’s configuration and evidence, then render CPU comparison, per-window,
+# sensitivity, policy and headroom tables.</how>
+# <why>The report must expose baseline comparisons, peak errors, stability and operational costs
+# together; a single lowest-MAE value cannot establish the best operational choice.</why>
+# <tradeoff>This formatter mirrors the notebook’s recorded gates. It describes the snapshot’s
+# initial selection and sensitivity results; it does not select or refit a final model.</tradeoff>
+# </function>
 def tables(snapshot):
     manifest = json.loads((snapshot / "frozen_run.json").read_text(encoding="utf-8"))
     config = manifest["configuration"]
@@ -72,12 +113,16 @@ def tables(snapshot):
     results = table([f"CPU, n={models[0]['n']}", "MAE (pp)", "RMSE (pp)", "MAE vs persistence", "Windows won",
                      f"Peak MAE (pp), n={models[0]['peak_n']}", "Gate"], [0, 1, 1, 1, 1, 1, 0], body)
 
+    # <section>Expose each expanding-window error alongside pooled errors;
+    # a benefit concentrated in one window is fragile on only 110 training keys.</section>
     window = {(row["candidate"], int(row["origin"])): float(row["mae"])
               for row in rows(snapshot, "validation_window_summary.csv", target=CPU)}
     origins = config["origins"]
     windows = table(["MAE (pp) at origin"] + [str(o) for o in origins], [0] + [1] * len(origins),
                     [[NAMES.get(name, name)] + [f"{window[name, o]:.3f}" for o in origins] for name in mae])
 
+    # <section>Render the fixed sensitivity checks, using extra decimals when
+    # normal rounding would hide the candidate/baseline difference.</section>
     labels = {"origins_minus_6": "Origins six bins earlier", "one_bin_delay": "One-bin data delay"}
     results_text = {"True": "holds", "False": "**fails**", "": "n/a (no challenger)"}
     body = []
@@ -88,6 +133,9 @@ def tables(snapshot):
                      f"{model:.{digits}f}", f"{base:.{digits}f}", results_text[row["mae_advantage_holds"]]])
     sensitivity = table(["Check", f"{initial} MAE (pp)", "persistence MAE (pp)", "Result"], [0, 1, 1, 0], body)
 
+    # <section>Keep trivial always/never-alert rules visible. Group identical
+    # forecast-policy outcomes only to reduce repetition, not to drop controls.
+    # Costs are illustrative scenario units, not measured cloud savings.</section>
     policies = rows(snapshot, "policy_summary.csv")
     costs = [column for column in policies[0] if column.startswith("cost_miss_")]
     groups = {}
@@ -104,6 +152,8 @@ def tables(snapshot):
         [[", ".join(names), *key[:3], *[f"**{v}**" if int(v) == low else v for v, low in zip(key[3:], lowest)]]
          for key, names in groups.values()])
 
+    # <section>Show descriptive error magnitudes and buffer coverage in CPU
+    # percentage points. This is not a calibrated interval or physical capacity.</section>
     head = {row["statistic"]: row["value"] for row in rows(snapshot, "headroom_summary.csv")}
     headroom = table(
         [f"{head['candidate']}, n={head['n']}", "Median abs. error", "P90 abs. error", "Max abs. error",
@@ -115,6 +165,14 @@ def tables(snapshot):
             "headroom": headroom}
 
 
+# <function name="claims">
+# <how>Load snapshot summaries and build the exact formatted phrases expected in the report’s
+# prose, including forecast, workload, error and policy numbers.</how>
+# <why>Generated tables alone cannot catch stale narrative claims. Linking the prose to the same
+# manifest prevents reporting one run’s tables with another run’s interpretation.</why>
+# <tradeoff>This is an explicit phrase checklist, not a semantic audit of every sentence. The
+# fixed labels reflect this report and its known candidate set.</tradeoff>
+# </function>
 def claims(snapshot):
     """Numbers the prose quotes, with their wording, formatted the way the report writes them."""
     manifest = json.loads((snapshot / "frozen_run.json").read_text(encoding="utf-8"))
@@ -185,6 +243,14 @@ def claims(snapshot):
     }
 
 
+# <function name="main">
+# <how>Resolve the snapshot explicitly cited by the report, verify its prediction digest, render
+# each marked table, then check prose phrases and stray tables.</how>
+# <why>The challenge requires reproducible communication: every displayed number should point to
+# the same frozen submission rather than whichever output directory was most recently run.</why>
+# <tradeoff>With --check, a differing table fails without writing. Without it, tables are
+# rewritten, but missing prose phrases still fail and must be reviewed manually.</tradeoff>
+# </function>
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--check", action="store_true", help="compare only; fail if a table or quoted number differs")
@@ -193,18 +259,24 @@ def main():
     cited = re.search(r"tracked snapshot\s+`(reports/evidence/[0-9a-f]{16})/`", text)
     if not cited or not (ROOT / cited.group(1) / "frozen_run.json").is_file():
         sys.exit(f"{REPORT} must cite an existing snapshot as: tracked snapshot `reports/evidence/<16 hex>/`.")
+    # <gate>The exact submitted CSV must match the cited manifest. Parsed
+    # numeric equality is insufficient because the manifest binds file bytes.</gate>
     snapshot = ROOT / cited.group(1)
     manifest = json.loads((snapshot / "frozen_run.json").read_text(encoding="utf-8"))
     if manifest["predictions_sha256"] != hashlib.sha256((ROOT / "predictions.csv").read_bytes()).hexdigest():
         sys.exit(f"{snapshot} does not describe the submitted predictions.csv; cite the snapshot of the frozen run.")
     if text.count("<!-- table:") != text.count("<!-- /table -->"):
         sys.exit("Every <!-- table:NAME --> marker needs its own <!-- /table --> closing marker.")
+    # <section>Generate replacements in memory first. The comparison mode is
+    # read-only; normal mode may update marked tables after structural checks.</section>
     updated = text
     for name, generated in tables(snapshot).items():
         block = re.compile(BLOCK.format(name=name), re.S)
         if len(block.findall(updated)) != 1:
             sys.exit(f"{REPORT} needs exactly one complete <!-- table:{name} --> block.")
         updated = block.sub(lambda match: f"<!-- table:{name} -->\n{generated}\n<!-- /table -->", updated)
+    # <section>Exclude generated tables from narrative checks and collapse
+    # whitespace so prose line wrapping does not create false discrepancies.</section>
     prose = re.sub(BLOCK.format(name=r"\S+"), "", updated, flags=re.S)
     if any(line.lstrip().startswith("|") for line in prose.splitlines()):
         sys.exit("A table sits outside the generated blocks; generate it or remove it.")
