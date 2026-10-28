@@ -13,6 +13,13 @@ pipeline uses these data, validation, model-selection and evidence rules.
 
 ## 1. Environment
 
+Clone the repository and work from its root:
+
+```bash
+git clone https://github.com/azharyy/amazonvmforecasting.git
+cd amazonvmforecasting
+```
+
 Use 64-bit Python 3.11 or newer. The recorded runs used Python 3.11.9 on Windows. `requirements.txt` pins the
 six direct dependencies exactly: numpy, pandas, scipy, scikit-learn, matplotlib and ipykernel.
 
@@ -32,9 +39,13 @@ python3 -m venv .venv
 .venv/bin/python -m pip check
 ```
 
-Optional, to use the notebook in VS Code: run
-`<venv python> -m ipykernel install --user --name atomity-forecasting --display-name "Python (Atomity forecasting)"`,
-then pick that kernel. The command below needs no Jupyter server.
+Optional, to use the notebook in VS Code: install Microsoft's **Python** (`ms-python.python`) and **Jupyter**
+(`ms-toolsai.jupyter`) extensions if absent, for example with `code --install-extension ms-python.python` and
+`code --install-extension ms-toolsai.jupyter`. Register the environment as a kernel with
+`<venv python> -m ipykernel install --user --name atomity-forecasting --display-name "Python (Atomity forecasting)"`.
+Open the project folder, open `notebooks/01_forecasting.ipynb`, click **Select Kernel** and choose
+**Python (Atomity forecasting)**. The first code cell prints the interpreter it runs, so you can confirm it is
+the `.venv` one; then run the cells from top to bottom. The command in section 3 needs no Jupyter server.
 
 ## 2. Dataset location
 
@@ -67,8 +78,9 @@ From the repository root:
 ```
 
 On macOS/Linux, use `.venv/bin/python` instead. The runner executes the notebook's code cells in order in a
-fresh process, about 30–45 s on the recorded machine. Every single-run self-check runs as part of it. It
-develops and freezes, and writes:
+fresh process, about 30–45 s on the recorded machine. Every single-run self-check runs as part of it. If any
+release row, holdout rows included, breaks a validation rule, the run stops before any forecast is written.
+Otherwise it develops and freezes, and writes:
 
 - **`predictions.csv`** at the repository root, the submission file. It is copied from the frozen run and
   verified against the SHA-256 recorded in `frozen_run.json`. Never edit it by hand.
@@ -85,10 +97,22 @@ develops and freezes, and writes:
   and all of its evidence are archived here. Archived files are never replaced or overwritten by a partial
   copy.
 
-`python reports/report_tables.py --check` then confirms that every table in `reports/final_report.md` and
-the key numbers quoted in its prose equal the values in the snapshot the report cites, that this snapshot
-describes the submitted `predictions.csv`, and that no table sits outside the generated blocks. Without
-`--check` it rewrites the tables from that snapshot. After a new freeze, cite the new snapshot in the report.
+`.\.venv\Scripts\python.exe reports/report_tables.py --check` (`.venv/bin/python` on macOS/Linux) then
+confirms that every table in `reports/final_report.md` and the key numbers quoted in its prose equal the
+values in the snapshot the report cites, that this snapshot describes both the submitted `predictions.csv`
+and its own copy, and that no table sits outside the generated blocks. Without `--check` it rewrites the
+tables from that snapshot.
+
+To refresh the report's evidence after a source change:
+
+1. Commit the change, so the manifest records a clean `git_commit`.
+2. Freeze with the command above. It prints `Evidence snapshot: reports/evidence/<16 hex>`.
+3. Cite that directory in `reports/final_report.md`, in its "tracked snapshot `reports/evidence/<16 hex>/`"
+   sentence.
+4. Run `.\.venv\Scripts\python.exe reports/report_tables.py` to regenerate the tables, and fix any quoted
+   number it lists.
+5. Run it again with `--check`.
+6. Commit the new snapshot, `predictions.csv` and the report.
 
 Options:
 
@@ -96,29 +120,31 @@ Options:
   during a smoke test.
 - `--evaluate-holdout` evaluates the run already frozen in `--output` (section 5). Leave it off.
 
-Prediction and data digests are of the exact bytes written. On Windows the CSV and JSON files have CRLF line
-endings, so a macOS/Linux run writes the same values with different digests. `.gitattributes` keeps git from
-changing the line endings of `predictions.csv` and `reports/evidence/`, so their recorded digests hold on every
-checkout once committed (a `predictions.csv` committed before that rule needs `git add --renormalize`). Source
-digests ignore line endings, because git may rewrite those of `run_notebook.py` and `requirements.txt`.
+Prediction and data digests are of the exact bytes written. Every generated CSV, JSON and text file is written
+with LF line endings whatever the operating system, so the same values give the same bytes and digests on
+Windows, macOS and Linux; snapshots frozen before this rule keep their original CRLF bytes. `.gitattributes`
+keeps git from changing the line endings of `predictions.csv` and `reports/evidence/`, so their recorded
+digests hold on every checkout. Source digests ignore line endings, because git may rewrite those of
+`run_notebook.py` and `requirements.txt`.
 
 ## 4. Main modeling decisions
 
 | Decision | Choice and reason |
 |---|---|
 | Targets | `active_vm_count(t)` = distinct VMs with a valid `avg_cpu` in [0,100] at *t*; idle 0% VMs count. `aggregate_cpu_utilization(t)` = unweighted mean of those VMs' `avg_cpu`, in percent. Invalid averages leave both numerator and denominator; conflicting duplicates, contradictory min/avg/max and grid gaps stop the run; nothing is imputed. |
-| Split | Boundary fixed from timestamp keys alone: development 0–32,700 s (110 keys), forecast template 33,000–39,900 s (24 keys). |
-| Isolation (stricter than required) | No development step reads holdout targets, quality or per-time VM counts, or metadata deletion times. Full-series construction and the release-wide audit run only in the separate evaluation command, against a run frozen earlier. |
+| Split | Full target series first, then the chronological split (ASSIGNMENT §3B): development 0–32,700 s (110 keys), forecast template 33,000–39,900 s (24 keys, taken from the timestamp grid). |
+| Isolation | Both targets are built for all 134 timestamps with fixed rules, then split 110/24; the 24 holdout values are discarded immediately and never shown, saved, or used for cleaning, diagnostics, fitting or selection. Only the separate evaluation command scores them. A holdout row breaking a validation rule stops the freeze before any forecast is written. Quality, coverage and metadata audits use development rows, whose rebuilt targets must equal the first 110 rows exactly; metadata deletion times are never loaded during development. |
 | Candidates | Persistence, simple exponential smoothing, Ridge autoregression (α ∈ {1, 10, 100}), with lags 1–3 and a trailing 6-bin mean. Recursive 24-step forecasts, refit per origin, with no metadata or calendar inputs. |
 | Validation | Expanding window, origins after 38/62/86 points, three non-overlapping 24-step blocks. MAE, pooled RMSE, relative improvement (N/A for zero-error baselines), peak and horizon errors. These are development estimates. |
-| Selection rule (predeclared) | At least 5% MAE gain, at least 2 of 3 window wins, RMSE not worse, peak MAE at most 5% worse; then origin-shift, one-bin-delay and leave-one-window-out checks, falling back to persistence if any fails. |
+| Selection rule (predeclared) | At least 5% MAE gain, at least 2 of 3 window wins, RMSE not worse and, for CPU (the only target with peaks), peak MAE at most 5% worse on at least 3 peak points; then origin-shift, one-bin-delay and leave-one-window-out checks, falling back to persistence if any fails. The peak guard's CPU-only scope was corrected after the rules were written; nothing changes on data-v1, where the count's persistence forecast is exact. |
 | Result | **Persistence for both targets.** Count is constant (exact tie at zero error). Ridge (α=1) had 17.6% lower pooled CPU MAE but lost its advantage with window 62 left out and with a one-bin delay. |
 | Operational policy | The prefix-P90 review alert did not beat always-alert in the three development windows (two events). Costs are illustrative units, not demonstrated savings. The 0.7 pp margin that covered every development error is descriptive, not calibrated. The unweighted mean measures no physical capacity, so no provisioning risk or cost is claimed. |
 
 ## 5. Final holdout
 
-The final 24 observed targets have **not** been opened. Evaluation is a separate command that consumes a run
-frozen earlier by the section-3 command. Never run it to "see how it does" during development:
+The final 24 observed targets have **not** been scored. Development builds them with the rest of the series
+and discards them at the split (section 4). Evaluation is a separate command that consumes a run frozen
+earlier by the section-3 command. Never run it to "see how it does" during development:
 
 ```powershell
 .\.venv\Scripts\python.exe run_notebook.py --data challenge_data --output reports/generated --evaluate-holdout
@@ -135,22 +161,22 @@ What it does, in order:
    line endings ignored), the configuration and the prediction digest. Any difference stops the run, even if
    the predictions would come out identical; so does an opening record written for a different frozen run. It
    never writes a new manifest.
-3. It reruns development in a temporary directory, so the output directory's evidence is untouched, and
+3. It reruns development in a temporary directory, so the output directory's evidence stays as frozen, and
    requires the rerun to reproduce the frozen predictions and every recomputable manifest field: decisions,
    development audit, fit diagnostics, alert threshold and alert.
 4. The first evaluation writes `holdout_opened.json` before any holdout value is used: in the output
    directory and, for a data-v1 run, in its tracked evidence snapshot, which every copy of that frozen run
-   shares. It then builds the full target series, asserts that its first 110 rows equal the development
-   targets, runs the deferred release-wide audit, and scores the frozen `predictions.csv` against persistence
-   (`holdout_*.csv`, `holdout_data_audit.json`).
+   shares. It then rebuilds the full target series with the same helper as development, asserts that its
+   first 110 rows equal the development targets exactly, runs the deferred release-wide audit, and scores the
+   frozen `predictions.csv` against persistence (`holdout_*.csv`, `holdout_data_audit.json`).
 5. A repeat for the same frozen run, found through either opening record, prints a **REPEAT** notice with
-   the first opening time and shows the saved results without reading the holdout again. If a first
-   evaluation stopped before saving its results, the repeat recomputes them, still labelled REPEAT. An opening
-   record is never rewritten.
+   the first opening time and shows the saved results without rescoring the holdout. If a first evaluation
+   stopped before saving its results, the repeat recomputes them, still labelled REPEAT. An opening record is
+   never rewritten.
 
 Once the holdout is opened, the output directory is sealed: the development command refuses to run there, so
 the frozen run, its evidence and the opening record stay as they were. Develop further only in a new
-`--output` directory, and do not present anything evaluated afterwards as an untouched test. These records
+`--output` directory, and do not present anything evaluated afterwards as a first test of this holdout. These records
 cannot stop someone from freezing and evaluating a changed procedure elsewhere; they make the original
 evaluation, and any repeat of the same frozen run, identifiable.
 
@@ -169,11 +195,12 @@ reports/evidence/<digest>/       tracked compact evidence of each frozen data-v1
 tests/run_synthetic_checks.py    multi-run synthetic checks (constant release, freeze/evaluate protocol)
 predictions.csv                  submission file written by the runner
 TESTING.md                       what was executed and verified, and what was not
-NOTEBOOK_SETUP.md                VS Code notebook setup details
+CODE_WALKTHROUGH.md              design walkthrough, from the challenge down to each function
 src/                             unused package stub; the analysis lives in the notebook
 ```
 
 Single-run self-checks are notebook cells, so the reproduction command always runs them. Behaviour that needs
-several runs (a constant-CPU smoke release, freezing then evaluating, refused changes, repeats) is checked on
+several runs (a constant-CPU smoke release, freezing then evaluating, refused changes, repeats, a release with
+an invalid holdout row refused at freeze) is checked on
 synthetic data by `.\.venv\Scripts\python.exe tests/run_synthetic_checks.py`, which works on a temporary copy
-of the project and never reads `challenge_data`. [`TESTING.md`](TESTING.md) lists every check and what was run.
+of the project and uses synthetic releases only, never `challenge_data`. [`TESTING.md`](TESTING.md) lists every check and what was run.

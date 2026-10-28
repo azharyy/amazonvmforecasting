@@ -15,7 +15,8 @@ usage: python reports/report_tables.py [--check]
 The report cites one snapshot ("tracked snapshot `reports/evidence/<16 hex>/`"). Each table sits between
 <!-- table:NAME --> and <!-- /table --> markers and is rewritten from the snapshot's CSVs; --check only
 compares. Key numbers quoted in the prose (outside the tables) must appear exactly as formatted below, the
-snapshot must describe the submitted predictions.csv, and no table may sit outside the markers.
+snapshot must describe the submitted predictions.csv, its own predictions.csv must match its manifest digest,
+and no table may sit outside the markers.
 """
 import argparse
 import csv
@@ -259,12 +260,15 @@ def main():
     cited = re.search(r"tracked snapshot\s+`(reports/evidence/[0-9a-f]{16})/`", text)
     if not cited or not (ROOT / cited.group(1) / "frozen_run.json").is_file():
         sys.exit(f"{REPORT} must cite an existing snapshot as: tracked snapshot `reports/evidence/<16 hex>/`.")
-    # <gate>The exact submitted CSV must match the cited manifest. Parsed
+    # <gate>The exact submitted CSV, and the snapshot's own copy that the
+    # quoted forecast values come from, must match the cited manifest. Parsed
     # numeric equality is insufficient because the manifest binds file bytes.</gate>
     snapshot = ROOT / cited.group(1)
     manifest = json.loads((snapshot / "frozen_run.json").read_text(encoding="utf-8"))
     if manifest["predictions_sha256"] != hashlib.sha256((ROOT / "predictions.csv").read_bytes()).hexdigest():
         sys.exit(f"{snapshot} does not describe the submitted predictions.csv; cite the snapshot of the frozen run.")
+    if manifest["predictions_sha256"] != hashlib.sha256((snapshot / "predictions.csv").read_bytes()).hexdigest():
+        sys.exit(f"{snapshot / 'predictions.csv'} does not match its manifest's prediction digest.")
     if text.count("<!-- table:") != text.count("<!-- /table -->"):
         sys.exit("Every <!-- table:NAME --> marker needs its own <!-- /table --> closing marker.")
     # <section>Generate replacements in memory first. The comparison mode is

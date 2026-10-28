@@ -5,7 +5,7 @@
 `run_notebook.py`. **Evidence:** every table comes from the tracked snapshot
 `reports/evidence/d21d137c7ebf7bd1/`; `reports/report_tables.py` generates them and checks the key numbers in
 the text. Validation scores are **development estimates**, because the same three windows chose the model.
-The real 24-step holdout has **not** been opened.
+The real 24-step holdout has **not** been scored.
 
 ## 1. Executive summary
 
@@ -26,11 +26,12 @@ The real 24-step holdout has **not** been opened.
 ## 2. Data understanding and preprocessing
 
 **Integrity and isolation.** The archive and its content files match the release-asset digest,
-`SHA256SUMS` and pinned digests. The split was fixed from the sorted unique `timestamp` keys before any VM ID
-or CPU value was read (134 keys 300 s apart; development 0–32,700 s, forecast 33,000–39,900 s), and later rows
-are dropped on their key, so no development cell uses a holdout value or VM count. Each target at *t* uses
-only readings stamped *t*, so the full series' first 110 rows equal the development series (ASSIGNMENT §3B;
-checked on synthetic data); the full series is built only at evaluation, which has not run on `data-v1`.
+`SHA256SUMS` and pinned digests. The grid has 134 keys 300 s apart (development 0–32,700 s, forecast
+33,000–39,900 s). Both targets are built for all 134 timestamps with fixed rules, then split 110/24 (ASSIGNMENT
+§3B); the 24 holdout values are discarded immediately and never shown, saved, or used for cleaning,
+diagnostics, fitting or selection. Only the separate evaluation command scores them. A holdout row breaking a
+validation rule stops the freeze before any forecast is written. Quality, coverage and metadata summaries use
+development rows, whose rebuilt targets equal the first 110 rows exactly.
 
 **Measured and defined.** There are 1,100,000 development rows, 10,000 VMs at each of the 110 keys, with no
 missing, duplicate, out-of-range or inconsistent value, one metadata row per VM, and category counts (6,180 /
@@ -87,11 +88,12 @@ prefix falls back to persistence. Metadata, calendar features and holdout values
 Each fold trains on rows [0, *e*) and forecasts [*e*, *e*+24) from one origin, for *e* = 38, 62, 86 (3.08,
 5.08 and 7.08 h): three non-overlapping two-hour blocks, issued like the final forecast and scored on the same
 timestamps against the same persistence forecast. CPU peaks are actuals at or above the training prefix's
-P90; the count has none, so the peak guard keeps it on persistence.
+P90. The count keeps persistence because persistence is exact.
 
 **Predeclared rule.** A challenger must cut pooled MAE by at least 5%, win two of three windows, not worsen
-pooled RMSE, and worsen peak MAE by at most 5% (with at least 3 peak points); among qualifiers within 1% of the
-best MAE, the simplest wins. It must then stay ahead with origins six bins earlier, with a one-bin data delay
+pooled RMSE, and, for CPU, worsen peak MAE by at most 5% (with at least 3 peak points); among qualifiers within
+1% of the best MAE, the simplest wins. The peak guard's CPU-only scope was corrected after the rules were
+written, and it has no effect on `data-v1`. It must then stay ahead with origins six bins earlier, with a one-bin data delay
 and with each window left out, or the rule falls back to persistence.
 
 **Leakage checks (all passed).** Each fold is rerun from fresh state with every later target shifted (CPU
