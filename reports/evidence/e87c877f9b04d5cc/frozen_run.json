@@ -1,0 +1,95 @@
+{
+  "configuration": {
+    "train_size": 110,
+    "horizon": 24,
+    "cadence_seconds": 300,
+    "origins": [
+      38,
+      62,
+      86
+    ],
+    "candidates": [
+      "persistence",
+      "ses",
+      "ridge_1",
+      "ridge_10",
+      "ridge_100"
+    ],
+    "features": [
+      "lag_1",
+      "lag_2",
+      "lag_3",
+      "mean_6"
+    ],
+    "peak_quantile": 0.9,
+    "minimum_mae_gain": 0.05,
+    "minimum_winning_windows": 2,
+    "maximum_peak_mae_degradation": 0.05,
+    "sensitivity_rule": "retain persistence if selected model loses MAE advantage under shifted origins, delay, or leave-one-window-out",
+    "bounds": "CPU [0,100]; count >=0; applied at every recursive step"
+  },
+  "decisions": {
+    "active_vm_count": {
+      "candidate": "persistence",
+      "reason": "Exact baseline retained."
+    },
+    "aggregate_cpu_utilization": {
+      "candidate": "persistence",
+      "reason": "Initial ridge_1 lost its MAE advantage under one_bin_delay, leave_out_origin_62; retain baseline."
+    }
+  },
+  "data_sha256": {
+    "vm_cpu_readings.csv.gz": "f961964e51f2250534a1273ce8b5aec76816b1ef9628d6356daad0f5af345440",
+    "vm_metadata.csv.gz": "acc07b52b3757d0c62628fea9cc988933aac93c48d40a8e4a527a15c10e1334b",
+    "DATA_CARD.md": "3ae8a73f19243ee57e49b8bb94ca4baa4687a7cb4b12ae8326026bb84f547e43"
+  },
+  "data_v1_release": true,
+  "development_audit": {
+    "timestamp_keys_in_release": 134,
+    "first_timestamp": 0,
+    "development_last_timestamp": 32700,
+    "forecast_template": "33000 to 39900 (24 keys)",
+    "development_rows": 1100000,
+    "development_vms": 10000,
+    "per_vm_development_timestamps_min": 110,
+    "per_vm_development_timestamps_max": 110,
+    "development_vms_without_metadata": 0,
+    "development_source_rows": 1100000,
+    "development_exact_duplicates_removed": 0,
+    "development_invalid_averages_excluded": 0,
+    "development_rows_with_missing_minmax": 0
+  },
+  "source_sha256": {
+    "notebooks/01_forecasting.ipynb": "c6f1d2f0f05f5e0b3b7322edd775a84535f528d4f2d0b24f71ddd567e45f9dfd",
+    "requirements.txt": "2aa36acc710d5676d2973d13ebbbff8431de9f02e5bbfcc17c0e0aad361fac4b",
+    "run_notebook.py": "9ba213c5e8dc8867f9bb63f302fcff3fcbc44fd0ab845f56cbd74b03282a1d89"
+  },
+  "git_commit": "322ce25396bc3c6b381c32bd31ae4d0edafa84da",
+  "git_uncommitted_sources": true,
+  "python": "3.11.9",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "versions": {
+    "numpy": "2.4.6",
+    "pandas": "3.1.0",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.9.1",
+    "matplotlib": "3.11.2",
+    "ipykernel": "7.4.0"
+  },
+  "predictions_sha256": "ce15e40beec1bbb566a7009c934f10132abc93765e5664eafc80da8f9b877584",
+  "final_fit_diagnostics": {
+    "active_vm_count": {
+      "candidate": "persistence",
+      "effective_model": "persistence",
+      "clipped_steps": 0
+    },
+    "aggregate_cpu_utilization": {
+      "candidate": "persistence",
+      "effective_model": "persistence",
+      "clipped_steps": 0
+    }
+  },
+  "holdout_previously_opened": false,
+  "final_alert_threshold": 9.668361517488389,
+  "final_alert": false
+}

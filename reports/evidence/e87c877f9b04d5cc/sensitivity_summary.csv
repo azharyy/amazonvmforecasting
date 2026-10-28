@@ -1,0 +1,11 @@
+check,target,candidate,mae,rmse,baseline_mae,relative_mae,skill,baseline_status,n,mae_advantage_holds
+origins_minus_6,active_vm_count,persistence,0.0,0.0,0.0,,,zero-error exact tie,72,
+origins_minus_6,aggregate_cpu_utilization,ridge_1,0.16612046397268923,0.21067723762218513,0.18859847627662166,0.8808155148031874,0.11918448519681257,nonzero-error baseline,72,True
+one_bin_delay,active_vm_count,persistence,0.0,0.0,0.0,,,zero-error exact tie,72,
+one_bin_delay,aggregate_cpu_utilization,ridge_1,0.1733411161423534,0.2152096357608617,0.17237750294560217,1.0055901331686845,-0.005590133168684508,nonzero-error baseline,72,False
+leave_out_origin_38,active_vm_count,persistence,0.0,0.0,0.0,,,zero-error exact tie,48,
+leave_out_origin_38,aggregate_cpu_utilization,ridge_1,0.16233773790284653,0.1930614965131401,0.21495760852879683,0.7552081501739396,0.2447918498260604,nonzero-error baseline,48,True
+leave_out_origin_62,active_vm_count,persistence,0.0,0.0,0.0,,,zero-error exact tie,48,
+leave_out_origin_62,aggregate_cpu_utilization,ridge_1,0.18778583557031545,0.23536969649174017,0.1635540404899087,1.1481577282213449,-0.14815772822134488,nonzero-error baseline,48,False
+leave_out_origin_86,active_vm_count,persistence,0.0,0.0,0.0,,,zero-error exact tie,48,
+leave_out_origin_86,aggregate_cpu_utilization,ridge_1,0.16438801931238492,0.2160521966436746,0.24608222447431552,0.6680206978116889,0.33197930218831107,nonzero-error baseline,48,True

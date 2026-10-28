@@ -20,19 +20,25 @@ Extract this starter bundle's contents into that folder. It adds:
 requirements.txt
 run_notebook.py
 notebooks/01_forecasting.ipynb
+reports/final_report.md
+reports/report_tables.py
+reports/evidence/            (tracked evidence snapshots)
+tests/run_synthetic_checks.py
+.gitattributes
 NOTEBOOK_SETUP.md
 TESTING.md
 ```
 
-The bundle preserves the assignment's existing README and `.gitignore`. Add these entries to
-your existing `.gitignore` before running the notebook:
+The bundle preserves the assignment's existing README. Add these entries to your existing
+`.gitignore` before running the notebook; the report's five figures stay tracked:
 
 ```gitignore
 challenge_data/*.gz
 challenge_data/SHA256SUMS
 challenge_data/DATA_CARD.md
 data-v1.tar.gz
-reports/generated/
+reports/generated/*
+!reports/generated/*.png
 ```
 
 No changes to the `cwfc` starter package are required.
@@ -152,7 +158,7 @@ The notebook verifies the hashes in either case. It never downloads omitted Azur
 11. Compare a utilization-review alert with persistence and trivial alert policies.
 12. Test future-value perturbations and a two-VM, offset-timestamp fixture.
 13. Freeze the configuration and generate 24 predictions with output-contract checks.
-14. Leave the final holdout-evaluation cell disabled until you deliberately open it.
+14. Evaluate the holdout only through `run_notebook.py --evaluate-holdout`, against a run frozen earlier.
 
 The feature set and acceptance rule are fixed recommendations, not assignment requirements.
 Automatic feature selection is deliberately omitted because 110 time points and three validation
@@ -179,34 +185,44 @@ terminal output and saved figures/CSVs remain available. It intentionally does n
 executed `.ipynb`. Use VS Code for the interactive notebook experience.
 
 The output directory contains `predictions.csv`, `frozen_run.json`, a runtime dependency snapshot,
-validation predictions/metrics, segment/error/sensitivity/leakage tables, policy results and figures.
-The runner also writes the submission copy `predictions.csv` at the repository root and verifies it
-against the frozen hash, so no manual copy or edit is needed. `--predictions PATH` writes the copy
-elsewhere, for example for a smoke test.
+validation predictions/metrics, segment/error/sensitivity/leakage tables, policy and headroom results and
+figures. The runner also writes the submission copy `predictions.csv` at the repository root and verifies
+it against the frozen hash, so no manual copy or edit is needed. A data-v1 run also saves a compact,
+tracked snapshot under `reports/evidence/<manifest digest>/`. `--predictions PATH` and `--evidence DIR`
+write those elsewhere, for example for a smoke test.
 
-`frozen_run.json` records development-code digests (excluding notebook outputs and the optional
-evaluation cell), the configuration, model decisions, data hashes, package versions, predictions
-hash and fit diagnostics. Save the notebook before freezing so these digests describe your code.
-An earlier `frozen_run.json` is archived with its predictions under `frozen_history/` before it
-would be overwritten.
+`frozen_run.json` records the source digests (every notebook code cell, outputs excluded, plus
+`requirements.txt` and `run_notebook.py`), the configuration with its selection and alert-cost rules, the
+initial and final model decisions, data hashes, package versions, the predictions hash and fit
+diagnostics. Save the notebook before freezing so these digests describe your code. Before a run writes
+anything, the previous `frozen_run.json` and all of its evidence are archived under `frozen_history/`.
 
 ## 7. Open the holdout only after freezing
 
-For interactive evaluation, change only the final code cell's `EVALUATE_FROZEN_HOLDOUT` to `True`
-and run that cell. The source digest excludes this evaluation cell, so this switch does not
-invalidate the development-code digest. Outputs/execution counters are also excluded.
+Evaluation is a separate command run in a fresh process after freezing: append `--evaluate-holdout` to the
+reproduction command, with the same `--data` and `--output`. There is no switch inside the notebook, and
+a kernel cannot evaluate: the notebook refuses unless `run_notebook.py` supplies the code it executes, since
+a kernel may run unsaved edits. In VS Code the last cell only reports that the holdout is unopened.
 
-For the command-line equivalent, append `--evaluate-holdout` to the reproduction command.
-It recomputes the same predeclared training-only pipeline, freezes predictions, then evaluates
-them once. Keep the original opening record. After seeing holdout outcomes, do not tune models,
-features or alert thresholds against them. A later run is not a newly untouched test.
+The evaluation consumes the frozen run. Before parsing any data row it compares the data, source (the
+executed code cells, `requirements.txt`, `run_notebook.py`; line endings ignored), configuration and
+prediction fingerprints with the original `frozen_run.json` and refuses any change, even one that leaves
+the predictions identical. It also refuses archived copies and a missing or changed submission copy. It
+reruns development in a temporary directory, requires the frozen predictions and every recomputable
+manifest field to be reproduced, writes `holdout_opened.json` before any holdout value is used (also in the
+run's tracked evidence snapshot), and then scores the frozen `predictions.csv`. A repeat for the same frozen
+run is labelled as such and shows the saved results. After opening, the output directory is sealed against
+further development runs. After seeing holdout outcomes, do not tune models, features or alert thresholds
+against them; a later run is not a newly untouched test.
 
 ## 8. Report
 
-The 4–6-page report is `reports/final_report.md`, written from the recorded run. It covers constant
-count under complete-trace selection, unweighted utilization versus CPU demand, scarce validation
-windows, failures, and the bounded operational interpretation. An alert cost scenario does not
-establish resource savings or production readiness. The final holdout evaluation remains unopened.
+The 4–6-page report is `reports/final_report.md`. Its tables are generated from the tracked evidence
+snapshot it cites by `reports/report_tables.py`; `--check` also verifies the key numbers in the text. It
+covers constant count under complete-trace selection, unweighted utilization versus CPU demand, scarce
+validation windows, failures, and the bounded operational interpretation. Neither the alert cost scenario
+nor the descriptive safety margin establishes capacity, provisioning risk, resource savings or production
+readiness. The final holdout evaluation remains unopened.
 
 ## Sources
 

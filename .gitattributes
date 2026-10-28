@@ -1,0 +1,5 @@
+# Frozen manifests record SHA-256 digests of these exact bytes (CRLF when written on Windows),
+# so git must store and check them out unchanged instead of normalizing line endings.
+# A file tracked before this rule keeps its old blob until it is re-added (git add --renormalize).
+predictions.csv -text
+reports/evidence/** -text

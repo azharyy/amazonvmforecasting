@@ -1,0 +1,17 @@
+statistic,value
+vms_per_timestamp,10000.0
+readings_at_or_above_80_pct,1.2720909090909092
+readings_at_or_above_95_pct,0.5662727272727273
+hot_vms_per_timestamp_min,108.0
+hot_vms_per_timestamp_median,127.0
+hot_vms_per_timestamp_max,146.0
+vms_ever_at_or_above_80,437.0
+vms_with_development_mean_at_or_above_80,99.0
+median_vm_development_mean_pct,5.501660014912842
+vms_with_development_mean_below_5_pct,46.35
+cpu_sum_share_of_hottest_1pct_vms,9.596431128357786
+cpu_sum_share_of_hottest_10pct_vms,43.544252865721575
+p10_threshold_pct,9.17919777090891
+p90_threshold_pct,9.668361517488389
+cohort_mean_min_pct,9.111633601754887
+cohort_mean_max_pct,9.912175173984915
