@@ -30,8 +30,8 @@ The real 24-step holdout has **not** been scored.
 33,000–39,900 s). Both targets are built for all 134 timestamps with fixed rules, then split 110/24 (ASSIGNMENT
 §3B); the 24 holdout values are discarded immediately and never shown, saved, or used for cleaning,
 diagnostics, fitting or selection. Only the separate evaluation command scores them. A holdout row breaking a
-validation rule stops the freeze before any forecast is written. Quality, coverage and metadata summaries use
-development rows, whose rebuilt targets equal the first 110 rows exactly.
+fatal validation rule stops the freeze before any forecast is written; invalid averages alone are excluded.
+Quality, coverage and metadata summaries use development rows, whose rebuilt targets equal the first 110 rows exactly.
 
 **Measured and defined.** There are 1,100,000 development rows, 10,000 VMs at each of the 110 keys, with no
 missing, duplicate, out-of-range or inconsistent value, one metadata row per VM, and category counts (6,180 /
@@ -79,7 +79,7 @@ establish a stable cycle, and 11.1 hours cannot reveal daily or weekly seasonali
 
 Candidates, features and rules were frozen before any validation score existed. **Persistence** repeats the
 last value; **SES** fits one smoothing coefficient by one-step squared error; **Ridge autoregression**
-(α ∈ {1, 10, 100}) uses lags 1–3 and a trailing six-bin mean, standardized on the training prefix, and
+(α = 1, 10 or 100) uses lags 1–3 and a trailing six-bin mean, standardized on the training prefix, and
 forecasts 24 steps recursively from its own forecasts. CPU is clipped to [0,100] (never needed); a constant
 prefix falls back to persistence. Metadata, calendar features and holdout values are never inputs.
 
@@ -92,9 +92,10 @@ P90. The count keeps persistence because persistence is exact.
 
 **Predeclared rule.** A challenger must cut pooled MAE by at least 5%, win two of three windows, not worsen
 pooled RMSE, and, for CPU, worsen peak MAE by at most 5% (with at least 3 peak points); among qualifiers within
-1% of the best MAE, the simplest wins. The peak guard's CPU-only scope was corrected after the rules were
-written, and it has no effect on `data-v1`. It must then stay ahead with origins six bins earlier, with a one-bin data delay
-and with each window left out, or the rule falls back to persistence.
+1% of the best MAE, the simplest wins. The challenger must then stay ahead with origins six bins earlier,
+with a one-bin data delay and with each window left out, or the rule falls back to persistence.
+Limiting the peak guard to CPU corrected its scope after the rules were written; this has no effect on
+`data-v1`, where the count's persistence forecast is exact.
 
 **Leakage checks (all passed).** Each fold is rerun from fresh state with every later target shifted (CPU
 +50 or +60 pp, count +7 or +8) and with later targets unknown; forecasts and fitted state stay identical on synthetic and

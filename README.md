@@ -80,6 +80,9 @@ From the repository root:
 On macOS/Linux, use `.venv/bin/python` instead. The runner executes the notebook's code cells in order in a
 fresh process, about 30–45 s on the recorded machine. Every single-run self-check runs as part of it. If any
 release row, holdout rows included, breaks a validation rule, the run stops before any forecast is written.
+This means conflicting duplicates, contradictory present bounds on valid averages, malformed keys/numbers,
+or a grid point without usable readings. A missing, nonfinite or out-of-range average is excluded by the
+fixed policy; exclusion alone is not fatal. The release-wide exclusion counts are deferred to evaluation.
 Otherwise it develops and freezes, and writes:
 
 - **`predictions.csv`** at the repository root, the submission file. It is copied from the frozen run and
@@ -112,7 +115,7 @@ To refresh the report's evidence after a source change:
 4. Run `.\.venv\Scripts\python.exe reports/report_tables.py` to regenerate the tables, and fix any quoted
    number it lists.
 5. Run it again with `--check`.
-6. Commit the new snapshot, `predictions.csv` and the report.
+6. Commit the new snapshot, `predictions.csv`, the report and any changed `reports/generated/*.png`.
 
 Options:
 
@@ -164,7 +167,7 @@ What it does, in order:
 3. It reruns development in a temporary directory, so the output directory's evidence stays as frozen, and
    requires the rerun to reproduce the frozen predictions and every recomputable manifest field: decisions,
    development audit, fit diagnostics, alert threshold and alert.
-4. The first evaluation writes `holdout_opened.json` before any holdout value is used: in the output
+4. The first evaluation writes `holdout_opened.json` before holdout scoring: in the output
    directory and, for a data-v1 run, in its tracked evidence snapshot, which every copy of that frozen run
    shares. It then rebuilds the full target series with the same helper as development, asserts that its
    first 110 rows equal the development targets exactly, runs the deferred release-wide audit, and scores the
@@ -201,6 +204,6 @@ src/                             unused package stub; the analysis lives in the 
 
 Single-run self-checks are notebook cells, so the reproduction command always runs them. Behaviour that needs
 several runs (a constant-CPU smoke release, freezing then evaluating, refused changes, repeats, a release with
-an invalid holdout row refused at freeze) is checked on
+a conflicting holdout duplicate refused at freeze) is checked on
 synthetic data by `.\.venv\Scripts\python.exe tests/run_synthetic_checks.py`, which works on a temporary copy
 of the project and uses synthetic releases only, never `challenge_data`. [`TESTING.md`](TESTING.md) lists every check and what was run.

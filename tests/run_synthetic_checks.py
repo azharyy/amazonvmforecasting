@@ -13,7 +13,7 @@
 1. A constant-CPU smoke release (134 keys from 600 s, VMs at 0, 20 and 40%) runs to completion and forecasts
    exactly the last 24 keys with count 3 and CPU 20%; so does a release whose CPU is flat until a VM arrives.
 2. Freezing and holdout evaluation are separate. A re-freeze archives the previous run. An unchanged frozen run
-   evaluates once, writing its opening record before any holdout value is used, and a repeat is labelled and
+   evaluates once, writing its opening record before holdout scoring, and a repeat is labelled and
    returns the saved results. Changed configuration, source, data or prediction bytes, archived copies and a
    changed submission copy are refused before any data row is parsed, and existing records stay byte-identical.
    A release whose holdout rows break a validation rule is refused at freeze, before any forecast is written.
@@ -63,7 +63,7 @@ def write_release(directory, levels, poison_holdout=False):
                 if level(step) is not None:
                     writer.writerow([key, f"vm_{vm}", max(level(step) - 5, 0), min(level(step) + 5, 100), level(step)])
             if poison_holdout and step >= 110:
-                writer.writerow([key, "vm_0", 0, 100, 50])  # a conflicting duplicate: any holdout read fails
+                writer.writerow([key, "vm_0", 0, 100, 50])  # a conflicting duplicate: the freeze must refuse it in the loader
     with gzip.open(directory / "vm_metadata.csv.gz", "wt", newline="") as stream:
         writer = csv.writer(stream)
         writer.writerow(META)
@@ -199,7 +199,7 @@ def expect_refusal(project, data, out, reason, *flags):
     before = digests(out)
     code, log, last_cell = run(project, data, out, "--evaluate-holdout", *flags)
     assert code != 0 and reason in log, log[-3000:]
-    assert last_cell <= 6, f"refused in cell {last_cell}, after data parsing began"
+    assert last_cell <= 6, f"refused in cell {last_cell}, after full-target construction began"
     assert digests(out) == before, "a refused evaluation changed existing records"
 
 
@@ -283,12 +283,13 @@ def check_protocol(tmp, project):
     # opening record (a copied project that divides by zero there, frozen and
     # evaluated with the same code) leaves that record, and the retry is a
     # REPEAT, never a first test.</scenario>
-    crash_project = copy_project(tmp / "project_crash", ("!= frozen['data_sha256']:", "!= frozen['data_sha256'] or 1 / 0:"))
+    crash_project = copy_project(tmp / "project_crash", ("= full_target_series(DATA_DIR)", "= 1 / 0 or full_target_series(DATA_DIR)"))
     interrupted = tmp / "interrupted"
     assert run(crash_project, data, interrupted)[0] == 0
     code, log, _ = run(crash_project, data, interrupted, "--evaluate-holdout")
     assert code != 0 and "ZeroDivisionError" in log and (interrupted / "holdout_opened.json").exists(), log[-3000:]
-    assert not (interrupted / "holdout_metrics.csv").exists(), "scoring ran before the interruption"
+    assert not any((interrupted / name).exists() for name in (
+        "holdout_data_audit.json", "holdout_metrics.csv", "holdout_horizon_errors.csv", "holdout_policy.csv")), "evaluation results preceded the opening record"
     record = (interrupted / "holdout_opened.json").read_bytes()
     code, log, _ = run(crash_project, data, interrupted, "--evaluate-holdout")
     assert "REPEAT" in log and (interrupted / "holdout_opened.json").read_bytes() == record, log[-3000:]

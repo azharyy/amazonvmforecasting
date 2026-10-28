@@ -124,12 +124,13 @@ metadata cannot establish exact used cores.
 split. `full_target_series` reads every CPU row and builds both targets for all
 134 timestamps; `load_development` keeps the first 110 rows and deletes the full
 frame at once, and takes the 24-key forecast template from the timestamp grid.
-Holdout rows pass through the same fixed validity rules, so an invalid one stops
-the freeze before any forecast is written; the rules were fixed before the data
-were seen and are not relaxed afterwards. Each target depends only on readings
+Holdout rows follow the same fixed validity rules: conflicting duplicates or contradictory
+bounds on a valid average stop the freeze; invalid averages alone are excluded.
+Rules were fixed before the data were seen and are not relaxed afterwards. Each target depends only on readings
 at its own timestamp, so rebuilding the targets from development rows gives
-exactly the same 110 rows. `load_development` asserts this, and the quality
-audit, coverage, metadata matching and EDA use those development rows only. A
+exactly the same 110 rows. A stable timestamp sort ensures pandas uses the same
+summation path for full and prefix builds even when future-only VM rows arrive
+out of order. `load_development` asserts this, and the quality audit, coverage, metadata matching and EDA use those development rows only. A
 synthetic fixture with a VM that appears only in later rows checks the same
 equality. Evaluation rebuilds the full series through the same helper before
 scoring it.
