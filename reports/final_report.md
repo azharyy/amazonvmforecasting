@@ -3,7 +3,7 @@
 **Data:** `data-v1` (archive SHA-256 `d04d402a…caeb`, the GitHub release-asset digest). **Contract:**
 `atomityhq/forecasting-challenge@6e5ac0e`. **Code:** `notebooks/01_forecasting.ipynb`, run by
 `run_notebook.py`. **Evidence:** every table comes from the tracked snapshot
-`reports/evidence/d21d137c7ebf7bd1/`; `reports/report_tables.py` generates them and checks the key numbers in
+`reports/evidence/0a6fdea759245cba/`; `reports/report_tables.py` generates them and checks the key numbers in
 the text. Validation scores are **development estimates**, because the same three windows chose the model.
 The real 24-step holdout has **not** been scored.
 
@@ -217,8 +217,8 @@ sustained-crossing alerts and VM-level hot-spot rules.
 | ridge_100 | 0.190 | 0.144 | 0.202 |
 <!-- /table -->
 
-**Reproduction.** `python run_notebook.py --data challenge_data --output reports/generated` regenerates
-every output: `predictions.csv` (SHA-256 `ce15e40b…7584`, Windows CRLF bytes) and an evidence snapshot per
-frozen run (any change, a commit included, gives a new one); `python reports/report_tables.py --check`
-verifies this report against the cited snapshot. `reports/evidence/e87c877f9b04d5cc/` keeps the previous
-run, with identical predictions. `--evaluate-holdout` has run on synthetic data only. See `TESTING.md`.
+**Reproduction.** `.venv/bin/python run_notebook.py --data challenge_data --output reports/generated` regenerates
+every output: `predictions.csv` (SHA-256 `28339ef1…1c9a`, LF bytes on every OS) and an evidence snapshot per
+frozen run (any change, a commit included, gives a new one); `.venv/bin/python reports/report_tables.py --check`
+verifies this report against the cited snapshot. `reports/evidence/d21d137c7ebf7bd1/` keeps the previous
+run, with identical forecast values and its original CRLF bytes. `--evaluate-holdout` has run on synthetic data only. Use `.\.venv\Scripts\python.exe` in Windows commands. See `TESTING.md`.

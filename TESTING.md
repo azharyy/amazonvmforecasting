@@ -1,5 +1,113 @@
 # Validation record
 
+## Current status at 61f174e548bb3a2e72836d52babaaa5386307923, 2026-10-28, Linux / Python 3.12.14
+
+This is the source commit used for the current evidence. The later evidence/documentation commit
+contains these results without changing the hashed sources. This session ran in Codex cloud on Linux,
+not the Windows / Python 3.11.9 machine described in the historical record. Claude's pasted log was
+used to locate unfinished work, not accepted as independent proof of passing checks here.
+
+Both targets are built for all 134 timestamps with fixed rules, then split 110/24; the 24 holdout
+values are discarded immediately and never shown, saved, or used for cleaning, diagnostics, fitting
+or selection. Only the separate evaluation command scores them. Fatal validation errors stop a freeze;
+invalid averages alone are excluded by the unchanged policy. No real holdout evaluation was run.
+
+Commands below ran from the repository root. Notebook/test commands used
+`PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR=/workspace/.onboarding/amazonvmforecasting/matplotlib
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1` (environment assignments on one shell line).
+
+### Executed and observed in this session
+
+1. `.venv/bin/python -m pip check`: exit 0; no broken requirements. All 39 notebook cells and
+   `language_info.version = 3.11` were retained. Every code cell parses with Python 3.11 grammar;
+   that syntax check is not a Python 3.11 runtime test. All notebook `to_csv` calls explicitly use
+   LF terminators and generated-text `write_text` calls use `newline='\n'`.
+2. `.venv/bin/python -u tests/run_synthetic_checks.py`: exit 0, **All synthetic checks passed**.
+   This includes constant CPU, late arrival, offset keys, freeze/re-freeze archives, changed
+   configuration/source/data/prediction/submission refusals before the loader, repeat evaluations,
+   synthetic evidence snapshots and a conflicting holdout duplicate refused in loader cell 8 with
+   no forecast/manifest/submission. The interruption is injected at the evaluation rebuild itself:
+   its opening record must exist, all four evaluation result files must be absent, and retry is REPEAT.
+   All evaluation in this suite uses disposable synthetic releases.
+3. An isolated synthetic reproduction first demonstrated the pandas rounding defect: a future-only
+   VM appended out of time order changed the full/prefix summation path and failed exact equality.
+   After the stable timestamp sort, the reproduction passed. The notebook now exercises exact prefix
+   equality for appended, reversed, VM-major and shuffled three-VM nontrivial-value fixtures on every
+   run. No tolerance was substituted for the required exact assertion.
+4. The notebook's selector oracle passed: an exact count challenger qualifies with `pass_peak` N/A;
+   a 3% count gain fails; a CPU challenger with worse peaks fails; CPU peak counts of three/two
+   respectively pass/fail the sample-size guard. A count-winning reason no longer claims a peak gate.
+   Valid synthetic suffix changes also alter release row counts and all three cleaning audit counts
+   (duplicate, excluded average, missing bound), while every development artifact remains identical.
+5. Scratch real-data freeze (exit 0):
+
+   ```bash
+   .venv/bin/python -u run_notebook.py --data challenge_data --output /tmp/atomity-review/scratch/out --predictions /tmp/atomity-review/scratch/predictions.csv --evidence /tmp/atomity-review/scratch/evidence
+   ```
+
+   Fixed-rule full-series validation completed without a fatal error. Forecast values equal the
+   pre-change submission. SHA-256 is
+   `28339ef10688b9bc49535e9aba9426db19ac5d346e20080745824303b0fd1c9a`, also obtained by
+   `git show c1e4757:predictions.csv | sha256sum`. Configuration, initial/final decisions,
+   development audit, final alert threshold and alert are unchanged. The count reason remains
+   **Exact baseline retained.** Leakage checks retain their passing statuses.
+6. Historical Windows snapshot comparison: **8 of 14 CSVs match byte-for-byte after CR removal**.
+   Six files have only floating-point roundoff: `selection_gates.csv`, `sensitivity_summary.csv`,
+   `training_acf.csv`, `validation_horizon_bands.csv`, `validation_model_summary.csv` and
+   `validation_window_summary.csv`. Maximum absolute difference is `4.618527782440651e-14`, below
+   `1e-12`. Labels, flags, decisions, displayed report values and prediction bytes agree. Exact
+   equality of every historical evidence CSV was therefore **not achieved** on this Linux run;
+   canonical LF does not promise identical floating-point calculations or platform metadata.
+7. After committing the fixes as `61f174e`, `.venv/bin/python -u run_notebook.py --data challenge_data
+   --output reports/generated` exited 0. It produced snapshot
+   `reports/evidence/0a6fdea759245cba/`, recording the full source commit above and
+   `git_uncommitted_sources: false`. A second identical command also exited 0, archived the first
+   freeze byte-for-byte under `reports/generated/frozen_history/0a6fdea759245cba/`, and reproduced
+   the same manifest, prediction digest and snapshot. The checkout had no earlier generated manifest;
+   its older tracked evidence snapshots were preserved, not fabricated as a prior local freeze.
+8. `.venv/bin/python reports/report_tables.py`, then `.venv/bin/python reports/report_tables.py --check`:
+   both exit 0 against `0a6fdea759245cba`, covering five tables, 29 quoted prose claims, the submitted
+   prediction digest and the snapshot's own prediction digest. An isolated copy accepted intact
+   historical evidence and rejected a changed snapshot CSV even when the root submission was intact.
+9. Final report rendering (exit 0):
+
+   ```bash
+   pandoc reports/final_report.md --from=gfm --standalone --resource-path=reports --pdf-engine=xelatex -V mainfont='Liberation Serif' -V fontsize=11pt -V geometry:margin=1in -V papersize:letter -o /tmp/atomity-review/final-report.pdf
+   pdfinfo /tmp/atomity-review/final-report.pdf
+   pdftotext -layout /tmp/atomity-review/final-report.pdf /tmp/atomity-review/final-report.txt
+   ```
+
+   **6 pages including the appendix**, which begins on page 6; Letter (612×792 pt), one-inch margins,
+   11 pt body, Liberation Serif. No missing-glyph warnings. Rendered pages 3 and 6 were inspected for
+   legibility and layout. The PDF stays outside the checkout. This validates this specified rendering,
+   not every Markdown viewer or font. An earlier Noto Serif trial had missing math glyphs and was not
+   accepted; the final Liberation Serif render uses plain wording for the unsupported set-membership glyph.
+10. `git diff --check`: exit 0. A name-only recursive search found **no `holdout_opened.json` under
+    `/workspace` or `/tmp`** (the available checkout, data, archived outputs and task scratch locations).
+    Successful synthetic tests remove their temporary opening records. No claim is made about the
+    inaccessible Windows temp folders mentioned in Claude's pasted log.
+
+### Not executed or not established in this session
+
+- Real `--evaluate-holdout`: deferred by design; no real final scores or targets were inspected.
+- Windows / Python 3.11.9, macOS, or a second operating-system run. Linux / Python 3.12.14 **was** run.
+- VS Code's UI/kernel picker; Python 3.11 runtime compatibility beyond the grammar check.
+- Bitwise equality of all evidence/figures across systems. Six historical CSVs differ only at rounding
+  precision as quantified above; figures were regenerated on this platform and are committed with the report.
+- Headless Edge and the historical Georgia-font pagination. A separately specified Linux render is used.
+- The optional palette-validator tool and any checks not listed as executed above.
+
+## Historical record: uncommitted tree on c1e4757, committed as 641f051
+
+The following is retained historical evidence, not a claim about the current checkout.
+Superseded statements include “Nothing was committed”, the dirty root prediction file, unrun Linux /
+Python 3.12, and CRLF-only differences from the then-HEAD file. The old assertion that source digests
+match its manifest applies to that historical tree; the new manifest above identifies the current code.
+The old corruption/holdout wording describes the development-first loader, which has been replaced by
+full-series construction before splitting. The opening record now precedes scoring and the evaluation
+rebuild; deterministic full-target construction already occurs during development. The old holdout target
+values were never displayed or scored, and no new real scoring has been performed.
+
 Every item below was **executed** in this checkout on 2026-10-27/28 unless it is dated otherwise or listed
 under *Not executed*. The real final 24 targets were never opened: no `holdout_opened.json` exists anywhere
 under `reports/`, and `--evaluate-holdout` was only ever run on synthetic releases.
