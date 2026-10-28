@@ -1,0 +1,5 @@
+target,candidate,mae_gain_pct,windows_won,rmse_change_pp,peak_n,peak_mae_change_pct,pass_mae_gain,pass_two_windows,pass_rmse,pass_peak,qualifies
+aggregate_cpu_utilization,ses,3.0913906904155186,3,-0.010857864769818093,16,-6.446044596670775,False,True,True,True,False
+aggregate_cpu_utilization,ridge_1,17.624617432099086,2,-0.0528630829887127,16,0.5076411956583371,True,True,True,True,True
+aggregate_cpu_utilization,ridge_10,15.329827674905394,2,-0.0474997974397319,16,-4.169588983998218,True,True,True,True,True
+aggregate_cpu_utilization,ridge_100,14.156937778695266,2,-0.04920601918392742,16,10.812344388600836,True,True,True,False,False

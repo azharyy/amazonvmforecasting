@@ -1,0 +1,121 @@
+{
+  "configuration": {
+    "train_size": 110,
+    "horizon": 24,
+    "cadence_seconds": 300,
+    "origins": [
+      38,
+      62,
+      86
+    ],
+    "candidates": [
+      "persistence",
+      "ses",
+      "ridge_1",
+      "ridge_10",
+      "ridge_100"
+    ],
+    "features": [
+      "lag_1",
+      "lag_2",
+      "lag_3",
+      "mean_6"
+    ],
+    "peak_quantile": 0.9,
+    "minimum_mae_gain": 0.05,
+    "minimum_winning_windows": 2,
+    "maximum_peak_mae_degradation": 0.05,
+    "minimum_peak_points": 3,
+    "tie_band": 0.01,
+    "tie_preference": [
+      "ses",
+      "ridge_100",
+      "ridge_10",
+      "ridge_1"
+    ],
+    "sensitivity_rule": "retain persistence if selected model loses MAE advantage under shifted origins, delay, or leave-one-window-out",
+    "bounds": "CPU [0,100]; count >=0; applied at every recursive step",
+    "alert_rule": "review if any forecast in the 24-step block reaches the training-prefix P90; an event is any actual value at or above it",
+    "alert_costs": {
+      "false_alert": 1,
+      "missed_event": [
+        3,
+        10
+      ]
+    }
+  },
+  "data_sha256": {
+    "vm_cpu_readings.csv.gz": "f961964e51f2250534a1273ce8b5aec76816b1ef9628d6356daad0f5af345440",
+    "vm_metadata.csv.gz": "acc07b52b3757d0c62628fea9cc988933aac93c48d40a8e4a527a15c10e1334b",
+    "DATA_CARD.md": "3ae8a73f19243ee57e49b8bb94ca4baa4687a7cb4b12ae8326026bb84f547e43"
+  },
+  "data_v1_release": true,
+  "source_sha256": {
+    "notebooks/01_forecasting.ipynb": "7d770af9d713abd7bbf0bbbff2ea002491be4e7d43f09db915590b6f9738390c",
+    "requirements.txt": "2aa36acc710d5676d2973d13ebbbff8431de9f02e5bbfcc17c0e0aad361fac4b",
+    "run_notebook.py": "b0731e53dcce480107e977e72d198d965ef52c8ba1debd31a2beb26bd74ce7e8"
+  },
+  "git_commit": "61f174e548bb3a2e72836d52babaaa5386307923",
+  "git_uncommitted_sources": false,
+  "python": "3.12.14",
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+  "versions": {
+    "numpy": "2.4.6",
+    "pandas": "3.1.0",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.9.1",
+    "matplotlib": "3.11.2",
+    "ipykernel": "7.4.0"
+  },
+  "environment_lock_sha256": "fa5d8f429b5698efb9f6226297820722205aad255b8ad805ae38922d5f298d2f",
+  "predictions_sha256": "28339ef10688b9bc49535e9aba9426db19ac5d346e20080745824303b0fd1c9a",
+  "initial_decisions": {
+    "active_vm_count": {
+      "candidate": "persistence",
+      "reason": "Exact baseline retained."
+    },
+    "aggregate_cpu_utilization": {
+      "candidate": "ridge_1",
+      "reason": "Passed the predeclared MAE/window/RMSE/peak gate; sensitivity confirmation follows."
+    }
+  },
+  "decisions": {
+    "active_vm_count": {
+      "candidate": "persistence",
+      "reason": "Exact baseline retained."
+    },
+    "aggregate_cpu_utilization": {
+      "candidate": "persistence",
+      "reason": "Initial ridge_1 lost its MAE advantage under one_bin_delay, leave_out_origin_62; retain baseline."
+    }
+  },
+  "development_audit": {
+    "timestamp_keys_in_release": 134,
+    "first_timestamp": 0,
+    "development_last_timestamp": 32700,
+    "forecast_template": "33000 to 39900 (24 keys)",
+    "development_rows": 1100000,
+    "development_vms": 10000,
+    "per_vm_development_timestamps_min": 110,
+    "per_vm_development_timestamps_max": 110,
+    "development_vms_without_metadata": 0,
+    "development_source_rows": 1100000,
+    "development_exact_duplicates_removed": 0,
+    "development_invalid_averages_excluded": 0,
+    "development_rows_with_missing_minmax": 0
+  },
+  "final_fit_diagnostics": {
+    "active_vm_count": {
+      "candidate": "persistence",
+      "effective_model": "persistence",
+      "clipped_steps": 0
+    },
+    "aggregate_cpu_utilization": {
+      "candidate": "persistence",
+      "effective_model": "persistence",
+      "clipped_steps": 0
+    }
+  },
+  "final_alert_threshold": 9.668361517488389,
+  "final_alert": false
+}

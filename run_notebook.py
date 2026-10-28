@@ -165,7 +165,7 @@ def main():
     # <why>Only exact data-v1 runs become release evidence. Tiny reviewer smoke
     # datasets remain useful tests but must not be presented as release results.</why>
     if frozen["data_v1_release"]:
-        print("Evidence snapshot:", snapshot_evidence(args.output, args.evidence))
+        print("Evidence snapshot:", snapshot_evidence(args.output, args.evidence).as_posix())
 
 
 # <entrypoint>Importing snapshot_evidence in synthetic tests has no training

@@ -1,0 +1,8 @@
+policy,selected_model,windows,event_windows,alerts,misses,false_alerts,cost_miss_3_false_1,cost_miss_10_false_1
+persistence,True,3,2,1,1,0,3,10
+ses,False,3,2,1,1,0,3,10
+ridge_1,False,3,2,1,1,0,3,10
+ridge_10,False,3,2,1,1,0,3,10
+ridge_100,False,3,2,0,2,0,6,20
+always_alert,False,3,2,3,0,1,1,1
+never_alert,False,3,2,0,2,0,6,20

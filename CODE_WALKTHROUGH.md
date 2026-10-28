@@ -34,7 +34,7 @@ claims about validation.
 | Challenge obligation | Implementation | Requirement versus local decision |
 |---|---|---|
 | Understand workload, quality, churn, segments and peaks (§3A) | Notebook §§3–7 | Required investigation; quantiles, ACF and contribution tables are chosen diagnostics |
-| Distinct observed VM count and arithmetic mean CPU (§3B; DATASET §4) | `clean_cpu`, `aggregate_targets` | Required targets; exact duplicate removal, invalid-average exclusion and refusal of gaps are documented local policies |
+| Distinct observed VM count and arithmetic mean CPU, full series before the split (§3B; DATASET §4) | `clean_cpu`, `aggregate_targets`, `full_target_series` | Required targets and order; exact duplicate removal, invalid-average exclusion and refusal of gaps are documented local policies |
 | First 110 / final 24, five-minute output (§3C) | `timestamp_grid`, `load_development`, `check_predictions` | Required split and timestamps; no hardcoded VM population in forecasting |
 | Baseline and temporal validation (§3D–E) | `forecast_values`, `backtest` | Required comparison; persistence, SES, Ridge and the three origins are local choices |
 | Multiple error measures and failure analysis (§3F) | `error_metrics`, `summarize`, notebook §§11–13 | MAE, RMSE, baseline-relative and peak analysis required; thresholds and acceptance gates are local heuristics |
@@ -46,9 +46,9 @@ claims about validation.
 ```mermaid
 flowchart TD
     A[run_notebook.py: resolve paths and run saved cells] --> B[Verify release bytes and record source identity]
-    B --> C[Read timestamp grid: 110 development keys + 24 future keys]
-    C --> D[Discard later rows; clean and aggregate development readings]
-    D --> E[Explore development workload and metadata segments]
+    B --> C[Read timestamp grid: 134 keys, 300 s apart]
+    C --> D[Build both targets for all 134 keys, split 110/24, discard the 24 holdout values]
+    D --> E[Explore development workload and metadata segments from development rows]
     D --> F[Fit persistence, SES and Ridge on each available prefix]
     F --> G[Forecast full 24-step blocks at origins 38, 62 and 86]
     G --> H[Score errors, apply selection gates and sensitivity fallback]
@@ -67,12 +67,16 @@ flowchart TD
    exact pins are repository runtime choices, not modeling requirements of the
    assignment. Archive and file hashes check identity; a smoke dataset can run
    but is explicitly distinguished from the actual release.
-2. **Data boundary — §§3–4.** The timestamp-only pass determines the 134-key
-   grid and split without counting future VMs. The chunk reader parses CSV rows,
-   then removes later rows before cleaning, aggregation or diagnostics. Thus the
-   guarantee is that holdout values do not influence development, not that their
-   bytes are never read or parsed. A second implementation using Python CSV and
-   `math.fsum` checks the development targets independently of pandas grouping.
+2. **Targets, then split — §§3–4.** A timestamp-only pass fixes the 134-key
+   grid. Both targets are built for all 134 timestamps with fixed rules, then
+   split 110/24; the 24 holdout values are discarded immediately and never
+   shown, saved, or used for cleaning, diagnostics, fitting or selection. Only
+   the separate evaluation command scores them. A holdout row breaking a
+   validation rule stops the freeze before any forecast is written. Rebuilding
+   the targets from development rows alone must give exactly the first 110 rows,
+   and those rows feed the audit, metadata matching and EDA. A second
+   implementation using Python CSV and `math.fsum` checks the development
+   targets independently of pandas grouping.
 3. **Workload understanding — §§5–7.** The notebook examines both the overall
    mean and the hot-VM tail: a low mean can hide busy VMs. Segment contributions
    use the full cohort denominator so they sum back to the required mean.
@@ -115,15 +119,21 @@ A 2-core VM and a large VM receive equal weight because that is the required
 estimand. Core-weighted utilization would answer another question, and bucketed
 metadata cannot establish exact used cores.
 
-**There is an intentional ordering difference from the literal assignment.**
-ASSIGNMENT §3B says to construct the full target series before splitting.
-Development here filters first and constructs only the prefix, keeping future
-values and per-time VM counts out of development audits as well as fitting.
-Each target depends only on readings at its own timestamp, so the fixed rules
-make prefix construction equivalent for the first 110 values. A synthetic fixture
-checks that property now; a real full-series comparison is deferred to the
-explicit frozen evaluation. This is the repository's rationale for a departure
-from the requested ordering, not proof a reviewer must accept the departure.
+**Targets are built before the split, as the assignment orders.** ASSIGNMENT
+§3B says to construct the full target series first, then apply the 110/24
+split. `full_target_series` reads every CPU row and builds both targets for all
+134 timestamps; `load_development` keeps the first 110 rows and deletes the full
+frame at once, and takes the 24-key forecast template from the timestamp grid.
+Holdout rows follow the same fixed validity rules: conflicting duplicates or contradictory
+bounds on a valid average stop the freeze; invalid averages alone are excluded.
+Rules were fixed before the data were seen and are not relaxed afterwards. Each target depends only on readings
+at its own timestamp, so rebuilding the targets from development rows gives
+exactly the same 110 rows. A stable timestamp sort ensures pandas uses the same
+summation path for full and prefix builds even when future-only VM rows arrive
+out of order. `load_development` asserts this, and the quality audit, coverage, metadata matching and EDA use those development rows only. A
+synthetic fixture with a VM that appears only in later rows checks the same
+equality. Evaluation rebuilds the full series through the same helper before
+scoring it.
 
 **Persistence is a serious candidate.** It repeats the last observed value,
 has no estimated parameters and forecasts a constant count exactly when the
@@ -169,8 +179,8 @@ error; RMSE emphasizes larger misses. Pooled RMSE is computed from pooled square
 errors, not by averaging window RMSEs. CPU errors are percentage points. Skill is
 `1 - model_MAE / persistence_MAE`; a zero-error baseline gives N/A, not an
 epsilon-adjusted percentage. CPU peaks use each training prefix's P90. The local
-gate needs 5% MAE improvement, two window wins, no RMSE degradation and at most
-5% peak-MAE degradation with at least three peak points. A 1% tie band favors
+gate needs 5% MAE improvement, two window wins, no RMSE degradation and, for
+CPU, at most 5% peak-MAE degradation with at least three peak points. A 1% tie band favors
 the locally declared simpler option. Sensitivity can then send the initial
 choice back to persistence without searching for a replacement.
 
@@ -178,11 +188,16 @@ The historical report's initial CPU challenger, `ridge_1`, improved pooled MAE
 by 17.6%, but lost its advantage with one window removed and with a one-bin
 delay. The final recorded choice is persistence for both targets. That is a
 robustness decision under these heuristics, not a proof persistence is optimal.
-One current limitation is important when reading `choose_models`: peaks are
-defined only for CPU, but the peak gate applies to both targets. A count
-challenger therefore cannot qualify even if a replacement dataset has varying
-counts. The supplied constant-count development data do not require one; this
-annotation task leaves that behavior unchanged.
+Peaks are defined only for CPU, so `choose_models` applies the peak guard to CPU
+challengers and records it as N/A for count challengers, which the other three
+gates decide. The guard first applied to both targets, so no count challenger
+could ever qualify; that scope was corrected after the rules were written. On
+data-v1 nothing changes: the count's persistence forecast is exact, so
+selection stops before any gate and records "Exact baseline retained." A
+hand-built score ledger in notebook §11 tests the selector: an exact count
+challenger on a ramping count wins with its peak guard N/A, while a 3% count
+gain, a CPU gain with 10% worse peak misses and a CPU gain with only two peak
+points all keep persistence.
 
 **An alert is weaker than a provisioning recommendation.** P90 means unusually
 high utilization relative to the observed prefix, not host saturation. The miss
@@ -209,13 +224,14 @@ Without `--check` it rewrites the table blocks; prose changes remain manual.
 The source fingerprint includes code comments. These explanations preserve the
 executable Python syntax tree, but change the notebook/runner source identity.
 An old freeze will therefore refuse evaluation under the annotated sources.
-Keep historical snapshots and the submitted CSV intact; generate a new
-development freeze in a separate output directory if current-source evidence is
-needed. Notebook markdown and outputs are excluded from the code-cell digest.
+Keep historical snapshots intact; README §3's evidence-refresh recipe freezes
+the committed source and cites the new snapshot in the report. Notebook
+markdown and outputs are excluded from the code-cell digest.
 The manifest records provenance, not an access-control barrier against someone
 bypassing the protocol.
 
-Use the environment's `.venv/bin/python` from the repository root to run
+Use the environment's interpreter (`.venv\Scripts\python.exe` on Windows,
+`.venv/bin/python` elsewhere) from the repository root to run
 `tests/run_synthetic_checks.py` and `reports/report_tables.py --check`. The first
 uses only synthetic data; the second reads the cited saved evidence. For real-data
 development, use the runner's `--output`, `--predictions` and `--evidence` overrides

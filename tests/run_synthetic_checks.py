@@ -8,14 +8,15 @@
 # <tradeoff>These are protocol and edge-case checks, not an accuracy estimate
 # or evidence of generalization beyond this short curated trace.</tradeoff>
 # </module>
-"""Synthetic end-to-end checks of run_notebook.py; challenge_data and its holdout are never read.
+"""Synthetic end-to-end checks of run_notebook.py; they use synthetic releases only, never challenge_data.
 
 1. A constant-CPU smoke release (134 keys from 600 s, VMs at 0, 20 and 40%) runs to completion and forecasts
    exactly the last 24 keys with count 3 and CPU 20%; so does a release whose CPU is flat until a VM arrives.
 2. Freezing and holdout evaluation are separate. A re-freeze archives the previous run. An unchanged frozen run
-   evaluates once, writing its opening record before any holdout value is used, and a repeat is labelled and
+   evaluates once, writing its opening record before holdout scoring, and a repeat is labelled and
    returns the saved results. Changed configuration, source, data or prediction bytes, archived copies and a
    changed submission copy are refused before any data row is parsed, and existing records stay byte-identical.
+   A release whose holdout rows break a validation rule is refused at freeze, before any forecast is written.
 3. A data-v1 freeze writes its evidence snapshot, which also records the opening for every copy of the run;
    snapshots are written once and never replaced.
 
@@ -48,8 +49,8 @@ LEVELS = [lambda step: 10 + 3 * math.sin(step / 3), lambda step: 30 + step * 791
 # supplies one VM’s CPU; None omits that observation.</how>
 # <why>Synthetic values make exact forecasts and failure cases calculable without inspecting real
 # holdout targets. The offset grid catches a runner hard-coded to start at zero.</why>
-# <tradeoff>A poisoned duplicate appears only after the training boundary: development must still
-# succeed, while an actual holdout read must fail.</tradeoff>
+# <tradeoff>A poisoned duplicate appears only after the training boundary. The full target series
+# is built before the split, so the freeze must refuse that release in its loader cell.</tradeoff>
 # </function>
 def write_release(directory, levels, poison_holdout=False):
     """A smoke release without SHA256SUMS: VM i reads levels[i](step) percent at every key (None: absent)."""
@@ -62,7 +63,7 @@ def write_release(directory, levels, poison_holdout=False):
                 if level(step) is not None:
                     writer.writerow([key, f"vm_{vm}", max(level(step) - 5, 0), min(level(step) + 5, 100), level(step)])
             if poison_holdout and step >= 110:
-                writer.writerow([key, "vm_0", 0, 100, 50])  # a conflicting duplicate: any holdout read fails
+                writer.writerow([key, "vm_0", 0, 100, 50])  # a conflicting duplicate: the freeze must refuse it in the loader
     with gzip.open(directory / "vm_metadata.csv.gz", "wt", newline="") as stream:
         writer = csv.writer(stream)
         writer.writerow(META)
@@ -96,8 +97,8 @@ def copy_project(destination, *replacements):
 # output and an optional evaluation flag. Return status, log and last started cell.</how>
 # <why>A fresh subprocess prevents notebook globals and fitted state leaking between scenarios;
 # the same interpreter guarantees the test uses the installed dependencies.</why>
-# <tradeoff>Cell-number checks locate early refusal, but the poisoned-data and unchanged-digest
-# assertions provide stronger behavioral evidence.</tradeoff>
+# <tradeoff>Cell-number checks locate early refusal; the unchanged-digest assertions show that
+# nothing was rewritten.</tradeoff>
 # </function>
 def run(project, data, out, *flags, evidence=None):
     """Run a project's runner in a fresh process; return exit code, output and the last cell started."""
@@ -189,8 +190,8 @@ def check_constant_releases(tmp, project):
 # <function name="expect_refusal">
 # <how>Fingerprint existing evidence, request evaluation and require a specific failure before
 # data parsing, with every existing output unchanged.</how>
-# <why>A nonzero exit alone could hide an unrelated failure. The reason, cell boundary and
-# poisoned duplicate jointly test the intended gate.</why>
+# <why>A nonzero exit alone could hide an unrelated failure. The reason and the cell boundary
+# jointly test the intended gate.</why>
 # <tradeoff>The bound refers to this notebook’s current cell layout and must change if cells are
 # reordered.</tradeoff>
 # </function>
@@ -198,8 +199,7 @@ def expect_refusal(project, data, out, reason, *flags):
     before = digests(out)
     code, log, last_cell = run(project, data, out, "--evaluate-holdout", *flags)
     assert code != 0 and reason in log, log[-3000:]
-    assert last_cell <= 6, f"refused in cell {last_cell}, after data parsing began"
-    assert "Conflicting duplicate" not in log, "the poisoned holdout was read"
+    assert last_cell <= 6, f"refused in cell {last_cell}, after full-target construction began"
     assert digests(out) == before, "a refused evaluation changed existing records"
 
 
@@ -237,52 +237,68 @@ def check_protocol(tmp, project):
     assert code != 0 and "sealed" in log and digests(out) == opened, log[-3000:]
     print("2b. after opening: a 6% gain rule is refused for evaluation, and re-freezing the opened run is refused")
 
-    # <scenario>Poison only the unseen rows, then re-freeze a different policy.
-    # Development must ignore the poison and archive the old evidence intact;
-    # identical predictions do not excuse changed source or policy.</scenario>
+    # <scenario>Re-freeze a different policy on the clean release. The old
+    # evidence must be archived intact; identical predictions do not excuse
+    # changed source or policy.</scenario>
     sealed, refrozen = tmp / "sealed", tmp / "refrozen"
-    assert run(project, poisoned, sealed)[0] == 0
-    assert run(project, poisoned, refrozen)[0] == 0
+    assert run(project, data, sealed)[0] == 0
+    assert run(project, data, refrozen)[0] == 0
     first = digests(refrozen)
-    assert run(gain_project, poisoned, refrozen)[0] == 0
+    assert run(gain_project, data, refrozen)[0] == 0
     archive = refrozen / "frozen_history" / first["frozen_run.json"][:16]
     assert sha256(refrozen / "frozen_run.json") != first["frozen_run.json"]
     assert digests(archive) == first, "the re-freeze did not archive the previous run byte for byte"
     assert (refrozen / "predictions.csv").read_bytes() == (sealed / "predictions.csv").read_bytes()
-    expect_refusal(project, poisoned, archive, "archived copy")
-    expect_refusal(gain_project, poisoned, sealed, "configuration")
+    expect_refusal(project, data, archive, "archived copy")
+    expect_refusal(gain_project, data, sealed, "configuration")
     eval_project = copy_project(tmp / "project_eval", ("float(train[target].quantile(PEAK_QUANTILE))",
                                                         "float(train[target].quantile(.95))"))
-    expect_refusal(eval_project, poisoned, sealed, "source_sha256")
+    expect_refusal(eval_project, data, sealed, "source_sha256")
     print("2c. a re-freeze archives the previous run byte-for-byte; archived copies, a changed configuration and a"
           " changed evaluation definition are refused although the predictions are identical")
 
     # <scenario>Recompression preserves parsed observations but changes bytes;
     # the frozen data fingerprint intentionally notices this provenance change.</scenario>
     regzipped = tmp / "regzipped"
-    shutil.copytree(poisoned, regzipped)
-    content = gzip.decompress((poisoned / "vm_cpu_readings.csv.gz").read_bytes())
+    shutil.copytree(data, regzipped)
+    content = gzip.decompress((data / "vm_cpu_readings.csv.gz").read_bytes())
     (regzipped / "vm_cpu_readings.csv.gz").write_bytes(gzip.compress(content, compresslevel=1))
     expect_refusal(project, regzipped, sealed, "data_sha256")
     edited = tmp / "edited"
     shutil.copytree(sealed, edited)
     shutil.copyfile(f"{sealed}_submission.csv", f"{edited}_submission.csv")
     (edited / "predictions.csv").write_bytes((sealed / "predictions.csv").read_bytes() + b"\n")
-    expect_refusal(project, poisoned, edited, "predictions_sha256")
+    expect_refusal(project, data, edited, "predictions_sha256")
     print("2d. changed data bytes and frozen prediction bytes are refused before any data row is parsed")
 
-    # <scenario>A first attempted opening is recorded even when bad synthetic
-    # holdout data aborts scoring, so a retry cannot masquerade as untouched.</scenario>
-    code, log, _ = run(project, poisoned, sealed, "--evaluate-holdout")
-    assert code != 0 and "Conflicting duplicate" in log and (sealed / "holdout_opened.json").exists(), log[-3000:]
-    record = (sealed / "holdout_opened.json").read_bytes()
-    code, log, _ = run(project, poisoned, sealed, "--evaluate-holdout")
-    assert "REPEAT" in log and (sealed / "holdout_opened.json").read_bytes() == record, log[-3000:]
+    # <scenario>The full target series is built before the split, so a holdout
+    # row breaking a validation rule stops the freeze in the loader cell: no
+    # manifest, predictions or submission copy is written.</scenario>
+    refused = tmp / "poisoned_out"
+    code, log, last_cell = run(project, poisoned, refused)
+    assert code != 0 and "Conflicting duplicate" in log and last_cell == 8, log[-3000:]
+    assert not (refused / "frozen_run.json").exists() and not (refused / "predictions.csv").exists()
+    assert not Path(f"{refused}_submission.csv").exists()
+    # <scenario>On the clean release, an evaluation interrupted right after its
+    # opening record (a copied project that divides by zero there, frozen and
+    # evaluated with the same code) leaves that record, and the retry is a
+    # REPEAT, never a first test.</scenario>
+    crash_project = copy_project(tmp / "project_crash", ("= full_target_series(DATA_DIR)", "= 1 / 0 or full_target_series(DATA_DIR)"))
+    interrupted = tmp / "interrupted"
+    assert run(crash_project, data, interrupted)[0] == 0
+    code, log, _ = run(crash_project, data, interrupted, "--evaluate-holdout")
+    assert code != 0 and "ZeroDivisionError" in log and (interrupted / "holdout_opened.json").exists(), log[-3000:]
+    assert not any((interrupted / name).exists() for name in (
+        "holdout_data_audit.json", "holdout_metrics.csv", "holdout_horizon_errors.csv", "holdout_policy.csv")), "evaluation results preceded the opening record"
+    record = (interrupted / "holdout_opened.json").read_bytes()
+    code, log, _ = run(crash_project, data, interrupted, "--evaluate-holdout")
+    assert "REPEAT" in log and (interrupted / "holdout_opened.json").read_bytes() == record, log[-3000:]
     submission = Path(f"{sealed}_submission.csv")
     submission.write_bytes(submission.read_bytes() + b"\n")
-    expect_refusal(project, poisoned, sealed, "differs from the frozen predictions")
-    print("2e. the opening record exists before the holdout is read and survives repeats; a changed submission"
-          " copy is refused")
+    expect_refusal(project, data, sealed, "differs from the frozen predictions")
+    print("2e. a release with a conflicting holdout duplicate is refused at freeze (loader cell; no manifest or"
+          " predictions); on the clean release the opening record exists before scoring and survives a repeat;"
+          " a changed submission copy is refused")
 
 
 # <function name="check_data_v1_snapshot">

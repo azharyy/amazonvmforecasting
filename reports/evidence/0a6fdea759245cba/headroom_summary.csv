@@ -1,0 +1,10 @@
+statistic,value
+candidate,persistence
+n,72
+median_absolute_error_pp,0.1622811985092234
+p90_absolute_error_pp,0.46943189343220637
+max_absolute_error_pp,0.638131241011564
+max_under_forecast_pp,0.5432633549182952
+max_under_forecast_origin,38
+example_buffer_pp,0.7
+points_within_buffer,72

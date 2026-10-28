@@ -1,0 +1,7 @@
+series,origin,backtest_moves_with_future,prefix_only_run_identical,control_teacher_forcing,control_global_scaler
+synthetic,38,False,True,detected,detected
+synthetic,62,False,True,detected,detected
+synthetic,86,False,True,detected,detected
+development,38,False,True,detected,detected
+development,62,False,True,detected,detected
+development,86,False,True,detected,detected
